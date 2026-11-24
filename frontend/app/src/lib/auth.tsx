@@ -108,5 +108,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 /** Where a user lands after signing in. */
 export function homeFor(u: User) {
   if (u.mfa_setup_required || u.password_expired) return '/portal/account/security';
-  return u.is_staff ? '/admin' : '/portal/account';
+  return u.is_staff ? '/admin' : '/portal';
 }

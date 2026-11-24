@@ -3,7 +3,7 @@ import { BrandMark } from '@/components/brand';
 import { pickVariant, useSite } from '@/lib/site';
 
 /** Split sign-in layout from the design: campus image on the left, form card on the right. */
-export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+export function AuthLayout({ title, subtitle, children, footer, wide }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const site = useSite();
   const bg = site.assets.login_background;
   return (
@@ -23,7 +23,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
         </div>
       </aside>
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
-        <div className="w-full max-w-[420px]">
+        <div className={wide ? "w-full max-w-[640px]" : "w-full max-w-[420px]"}>
           <div className="mb-6 flex flex-col items-center text-center">
             <BrandMark size={52} />
             <p className="mt-4 font-heading text-base font-semibold text-ink">Alumni Portal</p>

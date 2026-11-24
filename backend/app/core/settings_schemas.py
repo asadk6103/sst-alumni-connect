@@ -80,6 +80,64 @@ class RealtimeSettings(BaseModel):
     presence_ttl_seconds: int = Field(60, ge=15, le=600)
 
 
+class AlumniSettings(BaseModel):
+    """Registration, verification and directory policy."""
+
+    registration_open: bool = True
+    allow_student_registration: bool = True
+    require_phone: bool = True
+    require_registration_no: bool = False
+    require_admission_year: bool = False
+    founding_year: int = Field(1985, ge=1900, le=2100)
+    # Imported school records: verify automatically when the record matches AND the email or mobile number
+    # on the record is proven by the applicant ("verify"), or only suggest the match to an administrator ("review").
+    record_match_action: Literal["verify", "review"] = "verify"
+    allow_verification_documents: bool = True
+    directory_include_unverified: bool = False
+    default_profile_visibility: Literal["members", "connections", "hidden"] = "members"
+    default_contact_visibility: Literal["members", "connections", "only_me"] = "only_me"
+    new_registration_email: EmailStr | None = None  # notified about registrations waiting for review
+    terms_url: str | None = Field(None, max_length=300)
+
+
+# key: (title, description) — widgets of modules that are not delivered yet are added with their module.
+DASHBOARD_WIDGETS: dict[str, tuple[str, str]] = {
+    "welcome": ("Welcome banner", "Greeting with the dashboard banner image."),
+    "verification": ("Verification status", "Shows unverified members how to get verified."),
+    "profile_completion": ("Profile completion", "Progress and the next steps to complete a profile."),
+    "stats": ("Alumni statistics", "Registered and verified alumni, countries, batches."),
+    "connection_requests": ("Connection requests", "Pending requests with accept / decline."),
+    "suggestions": ("People you may know", "Batchmates and alumni in the same city or industry."),
+    "by_country": ("Alumni by country", "Where alumni live today."),
+    "by_year": ("Alumni by graduation year", "Registered alumni per graduating class."),
+    "quick_actions": ("Quick actions", "Shortcuts to common tasks."),
+}
+
+
+class DashboardWidget(BaseModel):
+    key: str
+    enabled: bool = True
+    roles: list[str] = Field(default_factory=list)  # empty = every member
+
+
+class DashboardSettings(BaseModel):
+    widgets: list[DashboardWidget] = Field(default_factory=lambda: [DashboardWidget(key=k) for k in DASHBOARD_WIDGETS])
+
+    @field_validator("widgets")
+    @classmethod
+    def _widgets(cls, v: list[DashboardWidget]) -> list[DashboardWidget]:
+        seen, out = set(), []
+        for w in v:
+            if w.key not in DASHBOARD_WIDGETS:
+                raise ValueError(f"Unknown widget: {w.key}")
+            if w.key not in seen:
+                seen.add(w.key)
+                out.append(w)
+        # widgets introduced later appear at the end, enabled
+        out += [DashboardWidget(key=k) for k in DASHBOARD_WIDGETS if k not in seen]
+        return out
+
+
 class BrandingColors(BaseModel):
     primary_navy: str = Field("#102344", pattern=HEX)
     dark_navy: str = Field("#0B1830", pattern=HEX)
@@ -120,6 +178,8 @@ SETTINGS_GROUPS: dict[str, type[BaseModel]] = {
     "general": GeneralSettings,
     "security": SecuritySettings,
     "realtime": RealtimeSettings,
+    "alumni": AlumniSettings,
+    "dashboard": DashboardSettings,
 }
 
 RESTART_FIELDS = {"realtime": ["max_connections_per_gateway", "heartbeat_interval_seconds", "connection_timeout_seconds"]}

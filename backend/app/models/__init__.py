@@ -1,3 +1,17 @@
+from .alumni import (
+    AlumniAchievement,
+    AlumniConnection,
+    AlumniEducation,
+    AlumniEmployment,
+    AlumniFollow,
+    AlumniProfile,
+    AlumniSkill,
+    Batch,
+    ProfileReport,
+    StudentRecord,
+    VerificationCode,
+    VerificationEvent,
+)
 from .base import Base
 from .config import (
     AuditLog,
@@ -14,7 +28,15 @@ from .identity import LoginAttempt, Permission, Role, Session, User, UserVerific
 
 __all__ = [
     "Base",
+    "AlumniAchievement",
+    "AlumniConnection",
+    "AlumniEducation",
+    "AlumniEmployment",
+    "AlumniFollow",
+    "AlumniProfile",
+    "AlumniSkill",
     "AuditLog",
+    "Batch",
     "BrandingSetting",
     "FeatureFlag",
     "IntegrationSetting",
@@ -24,11 +46,15 @@ __all__ = [
     "ModuleSetting",
     "NotificationLog",
     "Permission",
+    "ProfileReport",
     "Role",
     "Session",
+    "StudentRecord",
     "SystemSetting",
     "User",
     "UserVerification",
+    "VerificationCode",
+    "VerificationEvent",
     "role_permissions",
     "user_roles",
 ]

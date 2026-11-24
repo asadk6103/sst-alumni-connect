@@ -279,6 +279,7 @@ async def reset(body: ResetIn, request: Request, db: AsyncSession = Depends(get_
         if user.status == "pending":
             user.status = "active"
     await svc.revoke_all(db, user.id)
+    await _alumni_contact_proven(db, user)
     await messaging.queue_email(db, user.email, "auth.password_changed", {"name": user.full_name}, user.language or "en")
     await record(db, actor_id=user.id, action="password_reset", entity="user", entity_id=user.id,
                  summary="Password reset via email link", ip=client_ip(request))
@@ -324,6 +325,7 @@ async def verify_email(body: TokenIn, request: Request, db: AsyncSession = Depen
     if user.status == "pending":
         user.status = "active"
     forget_principals(user.id)
+    await _alumni_contact_proven(db, user)
     return {"data": {"ok": True}}
 
 
@@ -374,6 +376,7 @@ async def phone_verify(body: CodeIn, p: Principal = Depends(current_user), db: A
     user = await db.get(User, p.id)
     if user.phone == (v.data or {}).get("phone"):
         user.phone_verified_at = svc.now()
+        await _alumni_contact_proven(db, user)
     return {"data": {"ok": True}}
 
 
@@ -440,3 +443,10 @@ async def update_me(body: ProfileIn, p: Principal = Depends(current_user), db: A
         user.language = body.language
     forget_principals(p.id)
     return {"data": await user_payload(db, user)}
+
+
+async def _alumni_contact_proven(db: AsyncSession, user: User) -> None:
+    """A proven email/mobile may complete verification against an imported school record."""
+    from ..alumni import service as alumni
+
+    await alumni.try_auto_verify(db, user)

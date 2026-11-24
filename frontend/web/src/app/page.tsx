@@ -50,6 +50,9 @@ export default async function Home() {
               <a href="/login" className="inline-flex items-center gap-2 rounded-btn bg-primary px-5 py-3 font-medium text-white hover:bg-primary/90">
                 Sign in to the portal<ArrowRight className="h-4 w-4" />
               </a>
+              <a href="/register" className="inline-flex items-center gap-2 rounded-btn border border-white/70 px-5 py-3 font-medium text-white hover:bg-white/10">
+                Join the alumni network
+              </a>
               {site.contact_email && (
                 <a href={`mailto:${site.contact_email}`} className="inline-flex items-center gap-2 rounded-btn border border-white/70 px-5 py-3 font-medium text-white hover:bg-white/10">
                   <Mail className="h-4 w-4" />Contact the alumni office

@@ -86,7 +86,7 @@ def _safe_name(name: str) -> str:
 
 
 async def upload(db: AsyncSession, *, data: bytes, filename: str, folder: str = "general", alt: str = "",
-                 images_only: bool = False, actor=None) -> Media:
+                 images_only: bool = False, actor=None, private: bool = False) -> Media:
     sec = await settings_store.get_group(db, "security")
     if len(data) > sec.max_upload_mb * 1024 * 1024:
         raise AppError(413, "FILE_TOO_LARGE", f"The file is larger than {sec.max_upload_mb} MB.")
@@ -107,14 +107,14 @@ async def upload(db: AsyncSession, *, data: bytes, filename: str, folder: str = 
     stamp = datetime.now(UTC).strftime("%Y/%m")
     uid = uuid.uuid4().hex
     key = f"{folder}/{stamp}/{uid}.{ext}"
-    await store.put(key, data, mime)
+    await store.put(key, data, mime, private=private)
     variants = {}
     for vw, vdata, vh in variants_raw:
         vkey = f"{folder}/{stamp}/{uid}-{vw}.webp"
-        await store.put(vkey, vdata, "image/webp")
+        await store.put(vkey, vdata, "image/webp", private=private)
         variants[str(vw)] = {"key": vkey, "width": vw, "height": vh}
     m = Media(storage=store.name, key=key, filename=_safe_name(filename), mime=mime, size=len(data), width=width,
-              height=height, variants=variants, alt=alt[:300], folder=folder[:60], uploaded_by=actor)
+              height=height, variants=variants, alt=alt[:300], folder=folder[:60], uploaded_by=actor, private=private)
     db.add(m)
     await db.flush()
     return m
@@ -133,3 +133,20 @@ async def to_public(db: AsyncSession, m: Media | None) -> dict | None:
                      for v in sorted(m.variants.values(), key=lambda v: v["width"])],
         "created_at": m.created_at,
     }
+
+
+async def read(db: AsyncSession, m: Media) -> bytes:
+    """Bytes of a stored file (public or private) — callers enforce authorisation."""
+    store = await storage.backend(db) if m.storage != "local" else storage.LocalStorage(storage.infra().storage_dir)
+    return await store.get(m.key, private=m.private)
+
+
+def download_response(m: Media, data: bytes):
+    """Private file download: never cached by shared caches, never rendered inline unless an image or PDF."""
+    from fastapi.responses import Response
+
+    inline = m.mime.startswith("image/") or m.mime == "application/pdf"
+    return Response(content=data, media_type=m.mime, headers={
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+        "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{m.filename}"'})

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Activity, FileClock, Gauge, Image as ImageIcon, KeyRound, Mail, Menu as MenuIcon, Settings, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, BadgeCheck, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, Menu as MenuIcon, Settings, ShieldCheck, Users,
+  X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
 import { cn } from '@/lib/utils';
@@ -12,6 +13,9 @@ type NavItem = { to: string; label: string; icon: ComponentType<{ className?: st
 // Sections appear as their modules are delivered; every entry here leads to a working screen.
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: Gauge, perms: ['dashboard.view'], end: true },
+  { to: '/admin/alumni', label: 'Alumni Management', icon: GraduationCap, perms: ['alumni.view'] },
+  { to: '/admin/verification', label: 'Alumni Verification', icon: BadgeCheck, perms: ['verification.view'] },
+  { to: '/admin/batches', label: 'Batch Management', icon: Layers, perms: ['batches.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },
   { to: '/admin/roles', label: 'Roles & Permissions', icon: KeyRound, perms: ['roles.view'] },
   { to: '/admin/media', label: 'Media Library', icon: ImageIcon, perms: ['media.view'] },
@@ -73,7 +77,7 @@ export function AdminLayout() {
             <span className="hidden items-center gap-1.5 text-sm text-ink-muted sm:flex"><ShieldCheck className="h-4 w-4 text-primary" />Administration</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/portal/account" className="hidden text-sm font-medium text-ink-muted hover:text-ink sm:block">Alumni Portal</Link>
+            <Link to="/portal" className="hidden text-sm font-medium text-ink-muted hover:text-ink sm:block">Alumni Portal</Link>
             <UserMenu />
           </div>
         </header>

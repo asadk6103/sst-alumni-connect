@@ -9,6 +9,13 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/display';
 import { ForgotPasswordPage, LoginPage, ResetPasswordPage, VerifyEmailPage } from '@/pages/auth/pages';
 import { AccountPage } from '@/pages/portal/Account';
+import { PortalDashboard } from '@/pages/portal/Dashboard';
+
+const RegisterPage = lazy(() => import('@/pages/auth/Register').then((m) => ({ default: m.RegisterPage })));
+const DirectoryPage = lazy(() => import('@/pages/portal/Directory').then((m) => ({ default: m.DirectoryPage })));
+const ProfileViewPage = lazy(() => import('@/pages/portal/Profile').then((m) => ({ default: m.ProfileViewPage })));
+const MyProfilePage = lazy(() => import('@/pages/portal/MyProfile').then((m) => ({ default: m.MyProfilePage })));
+const ConnectionsPage = lazy(() => import('@/pages/portal/Connections').then((m) => ({ default: m.ConnectionsPage })));
 
 // Administration and setup screens load on demand (smaller first load for members).
 const SetupWizard = lazy(() => import('@/pages/setup/SetupWizard').then((m) => ({ default: m.SetupWizard })));
@@ -21,6 +28,9 @@ const AuditPage = lazy(() => ops().then((m) => ({ default: m.AuditPage })));
 const CommunicationsPage = lazy(() => ops().then((m) => ({ default: m.CommunicationsPage })));
 const HealthPage = lazy(() => ops().then((m) => ({ default: m.HealthPage })));
 const MediaPage = lazy(() => ops().then((m) => ({ default: m.MediaPage })));
+const AlumniPage = lazy(() => import('@/pages/admin/Alumni').then((m) => ({ default: m.AlumniPage })));
+const VerificationPage = lazy(() => import('@/pages/admin/Verification').then((m) => ({ default: m.VerificationPage })));
+const BatchesPage = lazy(() => import('@/pages/admin/Batches').then((m) => ({ default: m.BatchesPage })));
 
 function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean }) {
   const { user, ready } = useAuth();
@@ -55,9 +65,13 @@ export function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/register" element={<Suspense fallback={<FullPageSpinner />}><RegisterPage /></Suspense>} />
 
       <Route path="/admin" element={<RequireAuth staff><AdminLayout /></RequireAuth>}>
         <Route index element={<RequirePerm perms={perm('/admin')}><AdminDashboard /></RequirePerm>} />
+        <Route path="alumni/:tab?" element={<RequirePerm perms={perm('/admin/alumni')}><AlumniPage /></RequirePerm>} />
+        <Route path="verification/:tab?" element={<RequirePerm perms={perm('/admin/verification')}><VerificationPage /></RequirePerm>} />
+        <Route path="batches" element={<RequirePerm perms={perm('/admin/batches')}><BatchesPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />
@@ -69,7 +83,11 @@ export function App() {
       </Route>
 
       <Route path="/portal" element={<RequireAuth><PortalLayout /></RequireAuth>}>
-        <Route index element={<Navigate to="/portal/account" replace />} />
+        <Route index element={<PortalDashboard />} />
+        <Route path="directory" element={<Lazy><DirectoryPage /></Lazy>} />
+        <Route path="alumni/:id" element={<Lazy><ProfileViewPage /></Lazy>} />
+        <Route path="profile/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
+        <Route path="connections/:tab?" element={<Lazy><ConnectionsPage /></Lazy>} />
         <Route path="account/:section?" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
@@ -78,6 +96,10 @@ export function App() {
       <Route path="*" element={<div className="grid min-h-screen place-items-center bg-canvas"><NotFound /></div>} />
     </Routes>
   );
+}
+
+function Lazy({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<PageLoading />}>{children}</Suspense>;
 }
 
 function PageLoading() {

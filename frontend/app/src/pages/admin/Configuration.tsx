@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Blocks, Building2, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
+import { ArrowDown, ArrowUp, Bell, Blocks, Building2, GraduationCap, LayoutDashboard, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
   RotateCcw, Save, Send, Shield, Upload, Users, XCircle } from 'lucide-react';
 import { api, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,6 +17,8 @@ const SECTIONS = [
   { key: 'general', label: 'General', icon: Building2, perm: 'settings.view' },
   { key: 'branding', label: 'Branding', icon: Palette, perm: 'branding.view' },
   { key: 'security', label: 'Authentication & security', icon: Shield, perm: 'settings.view' },
+  { key: 'alumni', label: 'Alumni & registration', icon: GraduationCap, perm: 'settings.view' },
+  { key: 'dashboard', label: 'Dashboard widgets', icon: LayoutDashboard, perm: 'settings.view' },
   { key: 'realtime', label: 'Real-time & messaging', icon: RadioTower, perm: 'settings.view' },
   { key: 'modules', label: 'Modules', icon: Blocks, perm: 'modules.view' },
   { key: 'flags', label: 'Feature flags', icon: Flag, perm: 'feature_flags.view' },
@@ -49,6 +51,8 @@ export function ConfigurationPage() {
             : section === 'general' ? <SettingsGroup group="general" />
             : section === 'security' ? <SettingsGroup group="security" />
             : section === 'realtime' ? <SettingsGroup group="realtime" />
+            : section === 'alumni' ? <SettingsGroup group="alumni" />
+            : section === 'dashboard' ? <DashboardWidgets />
             : section === 'branding' ? <BrandingEditor />
             : section === 'modules' ? <ModulesPanel />
             : section === 'flags' ? <FlagsPanel />
@@ -63,7 +67,24 @@ export function ConfigurationPage() {
 // ── settings groups ─────────────────────────────────────────────────────────
 type FieldDef = { key: string; label: string; type: 'text' | 'number' | 'email' | 'bool' | 'select' | 'list' | 'textarea'; options?: [string, string][]; hint?: string; wide?: boolean };
 
-const GROUPS: Record<'general' | 'security' | 'realtime', { title: string; fields: FieldDef[] }> = {
+const GROUPS: Record<'general' | 'security' | 'realtime' | 'alumni', { title: string; fields: FieldDef[] }> = {
+  alumni: { title: 'Alumni & registration', fields: [
+    { key: 'registration_open', label: 'Registration is open', type: 'bool' },
+    { key: 'allow_student_registration', label: 'Current students may register', type: 'bool' },
+    { key: 'require_phone', label: 'Mobile number required at registration', type: 'bool' },
+    { key: 'require_registration_no', label: 'Student registration number required', type: 'bool' },
+    { key: 'require_admission_year', label: 'Admission year required', type: 'bool' },
+    { key: 'allow_verification_documents', label: 'Members may attach supporting documents', type: 'bool' },
+    { key: 'directory_include_unverified', label: 'Show unverified members in the directory', type: 'bool' },
+    { key: 'founding_year', label: 'First year of the school', type: 'number', hint: 'Earliest admission or graduation year accepted' },
+    { key: 'record_match_action', label: 'When a registration matches a school record', type: 'select', wide: true, options: [
+      ['verify', 'Verify automatically once the member proves the email or mobile number on the record'],
+      ['review', 'Only show the match to an administrator']] },
+    { key: 'default_profile_visibility', label: 'Default profile visibility', type: 'select', options: [['members', 'All members'], ['connections', 'Connections only'], ['hidden', 'Hidden']] },
+    { key: 'default_contact_visibility', label: 'Default visibility of email and mobile', type: 'select', options: [['only_me', 'Only the member'], ['connections', 'Connections'], ['members', 'All members']] },
+    { key: 'new_registration_email', label: 'Email new registrations to', type: 'email', hint: 'Leave empty to disable. The verification queue always lists them.' },
+    { key: 'terms_url', label: 'Terms and privacy policy link', type: 'text', hint: 'Shown on the registration form' },
+  ] },
   general: { title: 'General settings', fields: [
     { key: 'app_name', label: 'Application name', type: 'text' },
     { key: 'institution_name', label: 'Institution name', type: 'text' },
@@ -109,7 +130,7 @@ const GROUPS: Record<'general' | 'security' | 'realtime', { title: string; field
   ] },
 };
 
-function SettingsGroup({ group }: { group: 'general' | 'security' | 'realtime' }) {
+function SettingsGroup({ group }: { group: 'general' | 'security' | 'realtime' | 'alumni' }) {
   const { can } = useAuth();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings', group], queryFn: () => api<{ data: Record<string, unknown>; meta: { restart_required_fields: string[] } }>(`/api/v1/admin/config/settings/${group}`) });
@@ -476,4 +497,59 @@ function IntegrationPanel({ kind }: { kind: 'email' | 'sms' | 'storage' }) {
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <h3 className="mb-3 text-sm font-semibold text-ink">{children}</h3>;
+}
+
+// ── alumni dashboard widgets ────────────────────────────────────────────────
+const WIDGETS: Record<string, [string, string]> = {
+  welcome: ['Welcome banner', 'Greeting with the dashboard banner image.'],
+  verification: ['Verification status', 'Shows unverified members how to get verified.'],
+  profile_completion: ['Profile completion', 'Progress and the next steps to complete a profile.'],
+  stats: ['Alumni statistics', 'Registered and verified alumni, countries, batches.'],
+  connection_requests: ['Connection requests', 'Pending requests with accept / decline.'],
+  suggestions: ['People you may know', 'Batchmates and alumni in the same city or industry.'],
+  by_country: ['Alumni by country', 'Where alumni live today.'],
+  by_year: ['Alumni by graduation year', 'Registered alumni per graduating class.'],
+  quick_actions: ['Quick actions', 'Shortcuts to common tasks.'],
+};
+type Widget = { key: string; enabled: boolean; roles: string[] };
+
+function DashboardWidgets() {
+  const { can } = useAuth();
+  const q = useQuery({ queryKey: ['settings', 'dashboard'], queryFn: () => get<{ widgets: Widget[] }>('/api/v1/admin/config/settings/dashboard') });
+  const roles = useQuery({ queryKey: ['roles-brief'], queryFn: () => get<{ key: string; name: string; is_staff: boolean }[]>('/api/v1/admin/roles'), enabled: can('roles.view') });
+  const [widgets, setWidgets] = useState<Widget[] | null>(null);
+  useEffect(() => { if (q.data) setWidgets(q.data.widgets); }, [q.data]);
+  const save = useAction(() => api('/api/v1/admin/config/settings/dashboard', { method: 'PUT', body: { widgets } }), { success: 'Dashboard widgets saved.', invalidate: [['settings', 'dashboard']] });
+  const editable = can('settings.configure');
+  if (!widgets) return <Skeleton className="h-96 rounded-card" />;
+  const memberRoles = (roles.data ?? []).filter((r) => !r.is_staff);
+  const move = (i: number, d: number) => setWidgets((w) => { const n = [...w!]; [n[i], n[i + d]] = [n[i + d]!, n[i]!]; return n; });
+  const patch = (i: number, p: Partial<Widget>) => setWidgets((w) => w!.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  return (
+    <Card>
+      <CardHeader title="Alumni dashboard widgets" description="Order, visibility and audience of the widgets on members' dashboards. Widgets of later modules (events, jobs, community…) are added here as they are delivered."
+        action={editable && <Button onClick={() => save.mutate(undefined)} loading={save.isPending}><Save />Save</Button>} />
+      <ul className="divide-y divide-line">
+        {widgets.map((w, i) => (
+          <li key={w.key} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center">
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" aria-label="Move up" disabled={!editable || i === 0} onClick={() => move(i, -1)}><ArrowUp /></Button>
+              <Button size="icon" variant="ghost" aria-label="Move down" disabled={!editable || i === widgets.length - 1} onClick={() => move(i, 1)}><ArrowDown /></Button>
+            </div>
+            <div className="min-w-0 flex-1">
+              <Switch checked={w.enabled} disabled={!editable} onCheckedChange={(v) => patch(i, { enabled: v })} label={WIDGETS[w.key]?.[0] ?? w.key} description={WIDGETS[w.key]?.[1]} />
+            </div>
+            {memberRoles.length > 0 && (
+              <Select aria-label={`Who sees ${WIDGETS[w.key]?.[0]}`} disabled={!editable || !w.enabled} value={w.roles.length === 1 ? w.roles[0] : w.roles.length ? 'custom' : ''}
+                onChange={(e) => patch(i, { roles: e.target.value ? [e.target.value] : [] })} className="lg:w-56">
+                <option value="">Everyone</option>
+                {w.roles.length > 1 && <option value="custom" disabled>{w.roles.length} roles</option>}
+                {memberRoles.map((r) => <option key={r.key} value={r.key}>Only {r.name}</option>)}
+              </Select>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
 }

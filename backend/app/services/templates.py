@@ -51,4 +51,31 @@ DEFAULT_TEMPLATES: list[tuple[str, str, str, str | None, str, list[str]]] = [
     ("system.test_email", "email", "Test email", "Test email from {{app_name}}",
      "<p>This is a test message. Your email settings work.</p>", ["app_name"]),
     ("system.test_sms", "sms", "Test SMS", None, "Test message from {{app_name}}: your SMS settings work.", ["app_name"]),
+    ("auth.account_exists", "email", "Registration with an existing account", "You already have a {{app_name}} account",
+     "<p>Hello {{name}},</p><p>Someone (probably you) tried to register with this email address, but an account already exists.</p>"
+     '<p><a class="btn" href="{{login}}">Sign in</a></p><p>Forgot your password? <a href="{{reset}}">Choose a new one</a>. '
+     "If this was not you, no action is needed.</p>", ["name", "login", "reset", "app_name"]),
+    ("alumni.verified", "email", "Profile verified", "Welcome to the {{app_name}} community",
+     "<p>Hello {{name}},</p><p>Your alumni profile has been verified. You now have full access to the alumni directory, "
+     "connections and community features.</p>"
+     '<p><a class="btn" href="{{link}}">Open the alumni portal</a></p>', ["name", "link", "app_name"]),
+    ("alumni.rejected", "email", "Verification not approved", "We could not verify your {{app_name}} profile",
+     "<p>Hello {{name}},</p><p>We could not verify your profile yet:</p><blockquote>{{reason}}</blockquote>"
+     '<p>You can correct your details or attach a supporting document and submit again.</p><p><a class="btn" href="{{link}}">Review my profile</a></p>',
+     ["name", "reason", "link", "app_name"]),
+    ("alumni.invite", "email", "Invitation from school records", "You are invited to {{app_name}}",
+     "<p>Hello {{name}},</p><p>Your former school has invited you to join its alumni network. Your account is ready and "
+     "already verified from school records — just choose a password.</p>"
+     '<p><a class="btn" href="{{link}}">Set my password</a></p><p>The link is valid for {{days}} days.</p>',
+     ["name", "link", "days", "app_name"]),
+    ("alumni.connection_request", "email", "Connection request", "{{from}} wants to connect on {{app_name}}",
+     "<p>Hello {{name}},</p><p><strong>{{from}}</strong> sent you a connection request.</p><p>{{message}}</p>"
+     '<p><a class="btn" href="{{link}}">Reply</a></p>', ["name", "from", "message", "link", "app_name"]),
+    ("alumni.connection_accepted", "email", "Connection accepted", "{{from}} accepted your connection request",
+     "<p>Hello {{name}},</p><p><strong>{{from}}</strong> accepted your connection request.</p>"
+     '<p><a class="btn" href="{{link}}">View profile</a></p>', ["name", "from", "link", "app_name"]),
+    ("admin.new_registration", "email", "New registration (administrators)", "New registration: {{name}}",
+     "<p>A new member registered and is waiting for verification.</p><p>{{name}} ({{email}})<br>{{kind}}, class of {{year}}<br>"
+     "School records: {{match}}</p>"
+     '<p><a class="btn" href="{{link}}">Open the verification queue</a></p>', ["name", "email", "kind", "year", "match", "link", "app_name"]),
 ]

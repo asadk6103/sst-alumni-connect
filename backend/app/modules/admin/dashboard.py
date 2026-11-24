@@ -37,7 +37,18 @@ async def _figures(db: AsyncSession) -> dict:
     actors = {}
     if ids := {r.actor_id for r in recent if r.actor_id}:
         actors = {u.id: u.full_name for u in (await db.execute(select(User).where(User.id.in_(ids)))).scalars()}
+    from ...models import AlumniProfile
+    from ..alumni import service as alumni_svc
+    from ..alumni.dashboard import community_stats
+
+    recent_regs = (await db.execute(
+        select(User.id, User.full_name, AlumniProfile.graduation_year, AlumniProfile.kind, AlumniProfile.verification_status,
+               User.created_at).join(AlumniProfile, AlumniProfile.user_id == User.id).where(live)
+        .order_by(User.created_at.desc()).limit(6))).all()
     return {
+        "alumni": await community_stats(db), "pending_verification": await alumni_svc.pending_count(db),
+        "recent_registrations": [{"id": str(i), "full_name": n, "graduation_year": y, "kind": k, "verification_status": s,
+                                  "created_at": c} for i, n, y, k, s, c in recent_regs],
         "users_total": sum(by_status.values()), "users_by_status": by_status, "staff": staff,
         "new_last_30_days": new_30, "new_previous_30_days": new_prev, "active_last_7_days": active_7,
         "registrations_by_month": [{"month": m.strftime("%Y-%m"), "count": c} for m, c in signups],

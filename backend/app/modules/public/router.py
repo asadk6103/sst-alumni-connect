@@ -70,7 +70,7 @@ async def serve_media(key: str, db: AsyncSession = Depends(get_db)):
 
     base = key.rsplit("-", 1)[0] if key.endswith(".webp") else key
     m = (await db.execute(select(Media).where(or_(Media.key == key, Media.key.like(f"{base}.%"))).limit(1))).scalars().first()
-    if not m or m.deleted_at:
+    if not m or m.deleted_at or m.private:
         raise not_found("File")
     store = await storage.backend(db) if m.storage != "local" else storage.LocalStorage(storage.infra().storage_dir)
     try:

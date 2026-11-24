@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/admin/media", tags=["Admin: media library"])
 async def list_media(q: str | None = Query(None, max_length=100), folder: str | None = Query(None, max_length=60),
                      kind: str | None = Query(None, pattern="^(image|document)$"), p: PageParams = Depends(page_params),
                      _: Principal = Depends(require("media.view")), db: AsyncSession = Depends(get_db)):
-    stmt = select(Media).where(Media.deleted_at.is_(None))
+    stmt = select(Media).where(Media.deleted_at.is_(None), Media.private.is_(False))
     if q:
         stmt = stmt.where(Media.filename.ilike(f"%{q}%") | Media.alt.ilike(f"%{q}%"))
     if folder:
@@ -54,7 +54,7 @@ class MediaUpdate(BaseModel):
 async def update(media_id: uuid.UUID, body: MediaUpdate, _: Principal = Depends(require("media.edit")),
                  db: AsyncSession = Depends(get_db)):
     m = await db.get(Media, media_id)
-    if not m or m.deleted_at:
+    if not m or m.deleted_at or m.private:
         raise not_found("File")
     m.alt = body.alt
     return {"data": await media.to_public(db, m)}
@@ -64,7 +64,7 @@ async def update(media_id: uuid.UUID, body: MediaUpdate, _: Principal = Depends(
 async def delete(media_id: uuid.UUID, request: Request, me: Principal = Depends(require("media.delete")),
                  db: AsyncSession = Depends(get_db)):
     m = await db.get(Media, media_id)
-    if not m or m.deleted_at:
+    if not m or m.deleted_at or m.private:
         raise not_found("File")
     m.deleted_at = datetime.now(UTC)
     await record(db, actor_id=me.id, action="delete", entity="media", entity_id=m.id, summary=f"Deleted {m.filename}",

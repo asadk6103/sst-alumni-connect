@@ -33,14 +33,14 @@ def _validation_error(e: ValidationError) -> AppError:
 
 # ── settings groups ──────────────────────────────────────────────────────────
 @router.get("/settings/{group}", summary="Read a settings group")
-async def get_settings(group: Literal["general", "security", "realtime"],
+async def get_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard"],
                        _: Principal = Depends(require("settings.view")), db: AsyncSession = Depends(get_db)):
     value = await settings_store.get_group(db, group)
     return {"data": value.model_dump(mode="json"), "meta": {"restart_required_fields": RESTART_FIELDS.get(group, [])}}
 
 
 @router.put("/settings/{group}", summary="Save a settings group")
-async def put_settings(group: Literal["general", "security", "realtime"], body: dict, request: Request,
+async def put_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard"], body: dict, request: Request,
                        me: Principal = Depends(require("settings.configure")), db: AsyncSession = Depends(get_db)):
     try:
         value = SETTINGS_GROUPS[group].model_validate(body)

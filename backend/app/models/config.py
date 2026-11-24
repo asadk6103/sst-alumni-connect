@@ -111,6 +111,8 @@ class Media(UUIDPk, SoftDelete, Base):
     variants: Mapped[dict] = mapped_column(JSONB, default=dict)
     alt: Mapped[str] = mapped_column(String(300), default="")
     folder: Mapped[str] = mapped_column(String(60), default="general", index=True)
+    # Private files (verification documents, CVs …) are never served publicly; only via authorised endpoints.
+    private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 

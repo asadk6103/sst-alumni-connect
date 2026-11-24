@@ -108,7 +108,8 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Sign in to Alumni Portal" subtitle="Access your alumni account and stay connected with the SST community.">
+    <AuthLayout title="Sign in to Alumni Portal" subtitle="Access your alumni account and stay connected with the SST community."
+      footer={<>New here? <Link to="/register" className="font-medium text-primary hover:underline">Create an alumni account</Link></>}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         {error && (
           <Alert tone="danger">
