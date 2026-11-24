@@ -1,0 +1,34 @@
+# Production overlay: replicas and sizing for the published capacity targets
+# (≈2,000 concurrent connections; scale further with --scale).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Size to the server: each API replica runs API_WORKERS processes; keep
+#   replicas × API_WORKERS × (DB_POOL_SIZE + DB_MAX_OVERFLOW)  <  POSTGRES_MAX_CONNECTIONS.
+
+services:
+  api:
+    environment:
+      API_WORKERS: ${API_WORKERS:-4}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-8}
+      LOG_LEVEL: WARNING
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+      resources: { limits: { cpus: "2", memory: 1g } }
+
+  realtime:
+    environment: { LOG_LEVEL: WARNING }
+    deploy:
+      replicas: ${REALTIME_REPLICAS:-2}
+      resources: { limits: { cpus: "1", memory: 768m } }
+
+  celery-worker:
+    environment: { WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-8}" }
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+
+  postgres:
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-300}", "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}",
+              "-c", "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE:-3GB}", "-c", "work_mem=8MB", "-c", "log_min_duration_statement=500"]
+    deploy: { resources: { limits: { memory: 4g } } }

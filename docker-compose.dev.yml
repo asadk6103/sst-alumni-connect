@@ -1,0 +1,63 @@
+# Development overlay: hot reload for the API, the portal/admin app and the public website,
+# plus Mailpit to catch outgoing email (http://localhost:8025).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev up --build
+#
+# Public website + API: http://localhost:8080 (nginx, live reload for API and website).
+# Portal/admin app with instant reload: http://localhost:5173 (Vite dev server, proxies to the API).
+
+services:
+  api:
+    environment:
+      ENVIRONMENT: development
+      API_WORKERS: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips=*"]
+    entrypoint: ["sh", "-c", "/entrypoint.sh migrate && exec /entrypoint.sh \"$$@\"", "--"]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - app_config:/app/config
+      - storage:/app/storage
+      - infra_secrets:/run/infra:ro
+
+  realtime:
+    environment: { ENVIRONMENT: development }
+    volumes:
+      - ./backend/app:/app/app
+      - app_config:/app/config
+      - storage:/app/storage
+      - infra_secrets:/run/infra:ro
+
+  celery-worker:
+    environment: { ENVIRONMENT: development }
+    volumes:
+      - ./backend/app:/app/app
+      - app_config:/app/config
+      - storage:/app/storage
+      - infra_secrets:/run/infra:ro
+
+  # Vite dev server for the portal/admin app, reached through nginx at the usual paths.
+  spa-dev:
+    image: node:22.12.0-bookworm-slim
+    working_dir: /src
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npx vite --host 0.0.0.0 --port 5173"]
+    environment:
+      API_PROXY_TARGET: http://api:8000
+      REALTIME_PROXY_TARGET: http://realtime:8000
+    volumes:
+      - ./frontend/app:/src
+      - spa_node_modules:/src/node_modules
+    ports: ["5173:5173"]
+    networks: [edge]
+
+  frontend:
+    build: { target: web-build }
+    command: ["sh", "-c", "npm run dev -- -H 0.0.0.0"]
+    environment:
+      NODE_ENV: development
+      API_INTERNAL_URL: http://api:8000
+    volumes:
+      - ./frontend/web/src:/src/src
+
+volumes:
+  spa_node_modules:

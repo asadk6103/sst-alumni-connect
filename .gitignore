@@ -1,0 +1,21 @@
+# secrets & local state
+.env
+backend/.env
+backend/config/
+backend/storage/
+storage/*
+!storage/.gitkeep
+backups/*
+!backups/.gitkeep
+# build output
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+docs/screenshots/tmp/

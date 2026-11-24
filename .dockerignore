@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/.next
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.venv
+backend/config
+backend/storage
+backend/.env
+**/.env
+backups
+storage
+docs/screenshots
