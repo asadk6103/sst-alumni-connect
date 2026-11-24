@@ -3,6 +3,10 @@
 import time
 
 from redis.asyncio import Redis
+from redis.asyncio.retry import Retry
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from .config import infra
 from .errors import AppError
@@ -13,7 +17,10 @@ _client: Redis | None = None
 def redis() -> Redis:
     global _client
     if _client is None:
-        _client = Redis.from_url(infra().redis_url, decode_responses=True, health_check_interval=30)
+        # Reconnect and retry transparently when Redis restarts or a pooled connection went stale.
+        _client = Redis.from_url(infra().redis_url, decode_responses=True, health_check_interval=30,
+                                 retry=Retry(ExponentialBackoff(cap=1.0, base=0.05), 3),
+                                 retry_on_error=[RedisConnectionError, RedisTimeoutError])
     return _client
 
 

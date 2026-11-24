@@ -70,6 +70,11 @@ async def load_principal(db: AsyncSession, token: str) -> Principal | None:
         sid, uid = uuid.UUID(claims["sid"]), uuid.UUID(claims["sub"])
     except ValueError:
         return None
+    return await principal_for_session(db, sid, uid)
+
+
+async def principal_for_session(db: AsyncSession, sid: uuid.UUID, uid: uuid.UUID) -> Principal | None:
+    """Principal of a live session (also used by the real-time gateway, whose sockets outlive access tokens)."""
     hit = _principals.get(sid)
     if hit and time.monotonic() - hit[0] < PRINCIPAL_CACHE_SECONDS:
         return hit[1]

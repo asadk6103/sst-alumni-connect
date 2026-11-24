@@ -13,6 +13,7 @@ from .alumni import (
     VerificationEvent,
 )
 from .base import Base
+from .community import Comment, ContentReport, DiscussionGroup, GroupMember, ModerationAction, Post, PostMedia, Reaction
 from .config import (
     AuditLog,
     BrandingSetting,
@@ -25,6 +26,16 @@ from .config import (
     SystemSetting,
 )
 from .identity import LoginAttempt, Permission, Role, Session, User, UserVerification, role_permissions, user_roles
+from .messaging import (
+    BlockedUser,
+    Conversation,
+    ConversationMember,
+    ConversationSetting,
+    Message,
+    MessageAttachment,
+    MessageReaction,
+    MessageReceipt,
+)
 
 __all__ = [
     "Base",
@@ -37,11 +48,27 @@ __all__ = [
     "AlumniSkill",
     "AuditLog",
     "Batch",
+    "BlockedUser",
     "BrandingSetting",
+    "Comment",
+    "ContentReport",
+    "Conversation",
+    "ConversationMember",
+    "ConversationSetting",
+    "DiscussionGroup",
+    "GroupMember",
+    "ModerationAction",
+    "Post",
+    "PostMedia",
+    "Reaction",
     "FeatureFlag",
     "IntegrationSetting",
     "LoginAttempt",
     "Media",
+    "Message",
+    "MessageAttachment",
+    "MessageReaction",
+    "MessageReceipt",
     "MessageTemplate",
     "ModuleSetting",
     "NotificationLog",

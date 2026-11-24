@@ -16,6 +16,12 @@ const DirectoryPage = lazy(() => import('@/pages/portal/Directory').then((m) => 
 const ProfileViewPage = lazy(() => import('@/pages/portal/Profile').then((m) => ({ default: m.ProfileViewPage })));
 const MyProfilePage = lazy(() => import('@/pages/portal/MyProfile').then((m) => ({ default: m.MyProfilePage })));
 const ConnectionsPage = lazy(() => import('@/pages/portal/Connections').then((m) => ({ default: m.ConnectionsPage })));
+const community = () => import('@/pages/portal/Community');
+const CommunityPage = lazy(() => community().then((m) => ({ default: m.CommunityPage })));
+const GroupsPage = lazy(() => community().then((m) => ({ default: m.GroupsPage })));
+const GroupPage = lazy(() => community().then((m) => ({ default: m.GroupPage })));
+const PostPage = lazy(() => community().then((m) => ({ default: m.PostPage })));
+const MessagesPage = lazy(() => import('@/pages/portal/Messages').then((m) => ({ default: m.MessagesPage })));
 
 // Administration and setup screens load on demand (smaller first load for members).
 const SetupWizard = lazy(() => import('@/pages/setup/SetupWizard').then((m) => ({ default: m.SetupWizard })));
@@ -31,6 +37,7 @@ const MediaPage = lazy(() => ops().then((m) => ({ default: m.MediaPage })));
 const AlumniPage = lazy(() => import('@/pages/admin/Alumni').then((m) => ({ default: m.AlumniPage })));
 const VerificationPage = lazy(() => import('@/pages/admin/Verification').then((m) => ({ default: m.VerificationPage })));
 const BatchesPage = lazy(() => import('@/pages/admin/Batches').then((m) => ({ default: m.BatchesPage })));
+const CommunityAdminPage = lazy(() => import('@/pages/admin/Community').then((m) => ({ default: m.CommunityAdminPage })));
 
 function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean }) {
   const { user, ready } = useAuth();
@@ -72,6 +79,7 @@ export function App() {
         <Route path="alumni/:tab?" element={<RequirePerm perms={perm('/admin/alumni')}><AlumniPage /></RequirePerm>} />
         <Route path="verification/:tab?" element={<RequirePerm perms={perm('/admin/verification')}><VerificationPage /></RequirePerm>} />
         <Route path="batches" element={<RequirePerm perms={perm('/admin/batches')}><BatchesPage /></RequirePerm>} />
+        <Route path="community/:tab?" element={<RequirePerm perms={perm('/admin/community')}><CommunityAdminPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />
@@ -88,6 +96,11 @@ export function App() {
         <Route path="alumni/:id" element={<Lazy><ProfileViewPage /></Lazy>} />
         <Route path="profile/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
         <Route path="connections/:tab?" element={<Lazy><ConnectionsPage /></Lazy>} />
+        <Route path="community" element={<Lazy><CommunityPage /></Lazy>} />
+        <Route path="community/groups" element={<Lazy><GroupsPage /></Lazy>} />
+        <Route path="community/groups/:id" element={<Lazy><GroupPage /></Lazy>} />
+        <Route path="community/posts/:id" element={<Lazy><PostPage /></Lazy>} />
+        <Route path="messages/:id?" element={<Lazy><MessagesPage /></Lazy>} />
         <Route path="account/:section?" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

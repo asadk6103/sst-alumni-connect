@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Flag, MoreHorizontal, UserX } from 'lucide-react';
@@ -11,6 +11,8 @@ import { Card, EmptyState, Skeleton } from '@/components/ui/display';
 import { Field, Select, Textarea } from '@/components/ui/form';
 import { Dialog, Menu, MenuContent, MenuItem, MenuTrigger, useConfirm } from '@/components/ui/overlay';
 import { NoAccess, ProfileBody, RelationActions } from '@/components/alumni';
+
+const MessageButton = lazy(() => import('./Messages').then((m) => ({ default: m.MessageButton })));
 
 export function ProfileViewPage() {
   const { id } = useParams();
@@ -37,6 +39,7 @@ export function ProfileViewPage() {
       <ProfileBody p={p} actions={
         <div className="flex items-center gap-2">
           <RelationActions p={p} />
+          {p.connection === 'accepted' && <Suspense fallback={null}><MessageButton userId={p.id} /></Suspense>}
           <Menu>
             <MenuTrigger asChild><Button variant="ghost" size="icon" aria-label="More actions"><MoreHorizontal /></Button></MenuTrigger>
             <MenuContent>

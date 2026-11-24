@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Menu as MenuIcon, X } from 'lucide-react';
+import { get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { useLiveEvents } from '@/lib/live';
+import { LiveProvider } from '@/lib/live';
 import { useSite } from '@/lib/site';
 import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand';
@@ -13,7 +15,9 @@ type Item = { to: string; label: string; end?: boolean; perm?: string; module?: 
 const PORTAL_NAV: Item[] = [
   { to: '/portal', label: 'Dashboard', end: true },
   { to: '/portal/directory', label: 'Alumni Directory', perm: 'portal.directory', module: 'directory' },
+  { to: '/portal/community', label: 'Community', perm: 'portal.react', module: 'community' },
   { to: '/portal/connections', label: 'My Network', perm: 'portal.directory', module: 'directory' },
+  { to: '/portal/messages', label: 'Messages', perm: 'portal.message', module: 'messaging' },
   { to: '/portal/profile', label: 'My Profile' },
   { to: '/portal/account', label: 'Account' },
 ];
@@ -25,13 +29,13 @@ export function PortalLayout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
-  useLiveEvents(!!user);
   const items = PORTAL_NAV.filter((i) => (!i.perm || can(i.perm)) && (!i.module || site.modules[i.module] !== false));
   const link = (mobile: boolean) => ({ isActive }: { isActive: boolean }) => mobile
     ? cn('block rounded-btn px-3 py-2.5 text-sm hover:bg-white/10', isActive && 'bg-white/10 font-medium')
     : cn('flex items-center whitespace-nowrap border-b-[3px] px-3 text-sm font-medium transition-colors',
       isActive ? 'border-secondary text-white' : 'border-transparent text-white/75 hover:text-white');
   return (
+    <LiveProvider enabled={!!user}>
     <div className="min-h-screen bg-canvas">
       <header className="sticky top-0 z-30 bg-navy text-white shadow-[0_1px_0_rgb(255_255_255/0.06)]">
         <div className="mx-auto flex h-[68px] max-w-[1320px] items-center gap-4 px-4 sm:px-6">
@@ -44,19 +48,28 @@ export function PortalLayout() {
             <span className="hidden whitespace-nowrap font-heading text-[15px] font-semibold md:block">Alumni Portal</span>
           </Link>
           <nav aria-label="Portal" className="ml-4 hidden h-full items-stretch gap-1 xl:flex">
-            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(false)}>{i.label}</NavLink>)}
+            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(false)}>{i.label}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
             {user?.is_staff && <NavLink to="/admin" className={link(false)}>Administration</NavLink>}
           </nav>
           <div className="ml-auto"><UserMenu light /></div>
         </div>
         {open && (
           <nav aria-label="Portal" className="border-t border-white/10 px-4 py-2 xl:hidden">
-            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(true)}>{i.label}</NavLink>)}
+            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(true)}>{i.label}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
             {user?.is_staff && <NavLink to="/admin" className={link(true)}>Administration</NavLink>}
           </nav>
         )}
       </header>
       <main className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 lg:py-8"><Outlet /></main>
     </div>
+    </LiveProvider>
   );
+}
+
+function UnreadBadge() {
+  const { can } = useAuth();
+  const q = useQuery({ queryKey: ['unread'], queryFn: () => get<{ total: number }>('/api/v1/messages/unread'), enabled: can('portal.message'), refetchInterval: 120_000 });
+  const n = q.data?.total ?? 0;
+  if (!n) return null;
+  return <span className="ml-1.5 rounded-full bg-secondary px-1.5 text-[11px] font-semibold leading-[18px] text-white" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>;
 }

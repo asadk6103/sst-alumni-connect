@@ -411,10 +411,13 @@ async def ensure_profile(db: AsyncSession, user: User) -> AlumniProfile:
     if profile:
         return profile
     cfg = await settings(db)
-    profile = AlumniProfile(user_id=user.id, kind="alumni", visibility=cfg.default_profile_visibility,
-                            privacy=default_privacy(cfg), verification_status="pending", evidence_ids=[])
-    db.add(profile)
-    await db.flush()
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    # concurrent first requests must not both insert
+    await db.execute(pg_insert(AlumniProfile).values(
+        user_id=user.id, kind="alumni", visibility=cfg.default_profile_visibility, privacy=default_privacy(cfg),
+        verification_status="pending", evidence_ids=[], completion=0).on_conflict_do_nothing(index_elements=["user_id"]))
+    profile = await db.get(AlumniProfile, user.id, populate_existing=True)
     await refresh_search(db, user.id)
     return profile
 

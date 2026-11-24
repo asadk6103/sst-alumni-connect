@@ -26,7 +26,10 @@ from .modules.alumni import portal as alumni_portal
 from .modules.alumni import records as alumni_records
 from .modules.alumni import registration as alumni_registration
 from .modules.auth.router import router as auth_router
+from .modules.community import admin as community_admin
+from .modules.community import router as community
 from .modules.configuration.router import router as config_router
+from .modules.messaging import router as messaging
 from .modules.public.router import router as public_router
 from .modules.setup.router import announce
 from .modules.setup.router import router as setup_router
@@ -115,7 +118,8 @@ def create_app() -> FastAPI:
     errors.install(app)
     for r in (setup_router, auth_router, public_router, admin_users.router, admin_roles.router, admin_audit.router,
               admin_media.router, admin_health.router, admin_dashboard.router, config_router, alumni_registration.router,
-              alumni_dashboard.router, alumni_portal.router, alumni_admin.router, alumni_records.router, alumni_batches.router):
+              alumni_dashboard.router, alumni_portal.router, alumni_admin.router, alumni_records.router, alumni_batches.router,
+              community.router, community_admin.router, messaging.router):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))
     app.add_middleware(GZipMiddleware, minimum_size=1024)
