@@ -10,7 +10,7 @@ Last updated: 2026-11-25 · Current stage: **6 — Production readiness (next)**
 | 2 Alumni core | registration (alumni fields, institutional record matching), verification, profiles, batches, directory, alumni dashboard | ✅ built & tested locally |
 | 3 Engagement | community feed (real-time), messaging, groups, events + QR check-in, jobs, mentorship, achievements | ✅ built & tested locally |
 | 4 Institutional | donations (gateway-less until providers are chosen), scholarships, newsletters, notifications, gallery | ✅ built & tested locally |
-| 5 Administration | CMS + drag-and-drop page builder, navigation builder, custom fields, localisation (Urdu/RTL), reports & exports | ⏳ |
+| 5 Administration | CMS + drag-and-drop page builder, navigation builder, custom fields, localisation (Urdu/RTL), reports & exports | ✅ built & tested locally |
 | 6 Production readiness | security testing, load tests at target scale, HTTPS overlay, handbooks, ERD, checklist | ⏳ |
 
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
