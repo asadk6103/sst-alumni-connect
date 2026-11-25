@@ -17,7 +17,7 @@ from ...core.errors import AppError, conflict, forbidden, not_found
 from ...core.pagination import PageParams, page_params
 from ...core.redis import enforce
 from ...models import Achievement, AlumniProfile, Media, User
-from ...services import messaging
+from ...services import notifications
 from ..alumni import service as alumni
 from ..community.service import authors
 from ..events.service import image
@@ -351,17 +351,17 @@ async def review(
     if body.action == "publish":
         u = await db.get(User, a.user_id)
         general = await settings_store.get_group(db, "general")
-        await messaging.queue_email(
+        await notifications.notify(
             db,
-            u.email,
-            "achievements.published",
-            {
-                "name": u.full_name,
-                "title": a.title,
-                "kind": LABELS.get(a.kind, a.kind),
-                "link": f"{general.app_url}/portal/achievements/{a.id}",
-            },
-            u.language or "en",
+            u.id,
+            "achievements",
+            "published",
+            f"Your achievement was published: {a.title}",
+            link=f"/portal/achievements/{a.id}",
+            email=(
+                "achievements.published",
+                {"title": a.title, "kind": LABELS.get(a.kind, a.kind), "link": f"{general.app_url}/portal/achievements/{a.id}"},
+            ),
         )
     await record(
         db,

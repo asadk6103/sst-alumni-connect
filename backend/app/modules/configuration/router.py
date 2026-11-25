@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core import settings_store
 from ...core.audit import record
 from ...core.db import get_db
-from ...core.deps import Principal, client_ip, require
-from ...core.errors import AppError, not_found
+from ...core.deps import Principal, client_ip, require, require_staff
+from ...core.errors import AppError, forbidden, not_found
 from ...core.pagination import PageParams, page_params, paginate
 from ...core.permissions import DEFAULT_ROLES
 from ...core.settings_schemas import DEFAULT_MODULES, RESTART_FIELDS, SETTINGS_GROUPS, Branding
@@ -32,16 +32,35 @@ def _validation_error(e: ValidationError) -> AppError:
 
 
 # ── settings groups ──────────────────────────────────────────────────────────
+# Who may read / change each group (system settings permissions always work).
+GROUP_PERMS: dict[str, tuple[str, str]] = {
+    "donations": ("donations.view", "donations.configure"),
+    "alumni": ("alumni.view", "settings.configure"),
+}
+
+
+def _group_perm(group: str, write: bool):
+    async def dep(p: Principal = Depends(require_staff())) -> Principal:
+        read, change = GROUP_PERMS.get(group, ("settings.view", "settings.configure"))
+        needed = (change, "settings.configure") if write else (read, "settings.view")
+        if not any(p.can(x) for x in needed):
+            raise forbidden()
+        return p
+    return dep
+
+
 @router.get("/settings/{group}", summary="Read a settings group")
-async def get_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard"],
-                       _: Principal = Depends(require("settings.view")), db: AsyncSession = Depends(get_db)):
+async def get_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard", "donations"],
+                       me: Principal = Depends(require_staff()), db: AsyncSession = Depends(get_db)):
+    await _group_perm(group, False)(me)
     value = await settings_store.get_group(db, group)
     return {"data": value.model_dump(mode="json"), "meta": {"restart_required_fields": RESTART_FIELDS.get(group, [])}}
 
 
 @router.put("/settings/{group}", summary="Save a settings group")
-async def put_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard"], body: dict, request: Request,
-                       me: Principal = Depends(require("settings.configure")), db: AsyncSession = Depends(get_db)):
+async def put_settings(group: Literal["general", "security", "realtime", "alumni", "dashboard", "donations"], body: dict, request: Request,
+                       me: Principal = Depends(require_staff()), db: AsyncSession = Depends(get_db)):
+    await _group_perm(group, True)(me)
     try:
         value = SETTINGS_GROUPS[group].model_validate(body)
     except ValidationError as e:

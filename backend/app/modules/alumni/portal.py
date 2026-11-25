@@ -30,7 +30,7 @@ from ...models import (
     VerificationCode,
     VerificationEvent,
 )
-from ...services import media, messaging
+from ...services import media, notifications
 from . import service as svc
 from .schemas import (
     AchievementIn,
@@ -54,8 +54,9 @@ async def _me(db: AsyncSession, p: Principal) -> tuple[User, AlumniProfile]:
 
 
 async def own_profile(db: AsyncSession, user: User, profile: AlumniProfile) -> dict:
-    viewer = svc.Viewer(Principal(id=user.id, session_id=uuid.uuid4(), email=user.email, full_name=user.full_name,
-                                  status=user.status, roles=[]))
+    viewer = svc.Viewer(
+        Principal(id=user.id, session_id=uuid.uuid4(), email=user.email, full_name=user.full_name, status=user.status, roles=[])
+    )
     out = await svc.detail(db, user, profile, viewer)
     score, missing = await svc.completion(db, user, profile)
     docs = []
@@ -63,21 +64,34 @@ async def own_profile(db: AsyncSession, user: User, profile: AlumniProfile) -> d
         m = await db.get(Media, uuid.UUID(mid))
         if m and not m.deleted_at:
             docs.append({"id": str(m.id), "filename": m.filename, "size": m.size, "mime": m.mime, "created_at": m.created_at})
-    out.update({
-        "gender": profile.gender, "date_of_birth": profile.date_of_birth, "batch_id": str(profile.batch_id) if profile.batch_id else None,
-        "registration_no": profile.registration_no, "email": user.email, "phone": user.phone,
-        "phone_verified": bool(user.phone_verified_at), "website": profile.website, "linkedin": profile.linkedin,
-        "privacy": {"visibility": profile.visibility, "sections": svc.privacy_of(profile)},
-        "privacy_sections": svc.PRIVACY_SECTIONS,
-        "completion": score, "completion_missing": missing,
-        "locked_fields": sorted(svc.lock_identity_fields(profile)),
-        "verification": {
-            "status": profile.verification_status, "method": profile.verification_method,
-            "verified_at": profile.verified_at, "rejection_reason": profile.rejection_reason,
-            "submitted_at": profile.submitted_at, "note": profile.verification_note, "documents": docs,
-            "documents_allowed": (await svc.settings(db)).allow_verification_documents,
-        },
-    })
+    out.update(
+        {
+            "gender": profile.gender,
+            "date_of_birth": profile.date_of_birth,
+            "batch_id": str(profile.batch_id) if profile.batch_id else None,
+            "registration_no": profile.registration_no,
+            "email": user.email,
+            "phone": user.phone,
+            "phone_verified": bool(user.phone_verified_at),
+            "website": profile.website,
+            "linkedin": profile.linkedin,
+            "privacy": {"visibility": profile.visibility, "sections": svc.privacy_of(profile)},
+            "privacy_sections": svc.PRIVACY_SECTIONS,
+            "completion": score,
+            "completion_missing": missing,
+            "locked_fields": sorted(svc.lock_identity_fields(profile)),
+            "verification": {
+                "status": profile.verification_status,
+                "method": profile.verification_method,
+                "verified_at": profile.verified_at,
+                "rejection_reason": profile.rejection_reason,
+                "submitted_at": profile.submitted_at,
+                "note": profile.verification_note,
+                "documents": docs,
+                "documents_allowed": (await svc.settings(db)).allow_verification_documents,
+            },
+        }
+    )
     return out
 
 
@@ -98,13 +112,29 @@ async def put_me(body: ProfileIn, p: Principal = Depends(require("portal.access"
             fail(f, "This detail is confirmed by verification. Contact the alumni office to change it.", "FIELD_LOCKED")
     school_fields = {"kind", "admission_year", "graduation_year", "batch_id", "date_of_birth"} & sent
     if school_fields:
-        merged = body.model_copy(update={f: getattr(profile, f) for f in ("kind", "admission_year", "graduation_year", "batch_id")
-                                         if f not in sent})
+        merged = body.model_copy(
+            update={f: getattr(profile, f) for f in ("kind", "admission_year", "graduation_year", "batch_id") if f not in sent}
+        )
         await validate_school(db, merged, await svc.settings(db), registering=False, fields=school_fields)
     if "full_name" in sent and body.full_name:
         user.full_name = body.full_name
-    for f in ("kind", "gender", "date_of_birth", "admission_year", "graduation_year", "batch_id", "class_name", "city",
-              "country", "designation", "organization", "industry", "bio", "website", "linkedin"):
+    for f in (
+        "kind",
+        "gender",
+        "date_of_birth",
+        "admission_year",
+        "graduation_year",
+        "batch_id",
+        "class_name",
+        "city",
+        "country",
+        "designation",
+        "organization",
+        "industry",
+        "bio",
+        "website",
+        "linkedin",
+    ):
         if f in sent:
             setattr(profile, f, getattr(body, f))
     if "registration_no" in sent:
@@ -173,8 +203,12 @@ def _section_routes(section: str) -> None:
         return {"data": out(row)}
 
     @router.put(f"/me/{section}/{{item_id}}", summary=f"Update an entry of your {section}", name=f"update_{section}")
-    async def edit(item_id: uuid.UUID, body: schema, p: Principal = Depends(require("portal.access")),  # type: ignore[valid-type]
-                   db: AsyncSession = Depends(get_db)):
+    async def edit(
+        item_id: uuid.UUID,
+        body: schema,
+        p: Principal = Depends(require("portal.access")),  # type: ignore[valid-type]
+        db: AsyncSession = Depends(get_db),
+    ):
         row = await db.get(model, item_id)
         if not row or row.user_id != p.id:
             raise not_found("Entry")
@@ -209,12 +243,12 @@ for _s in SECTIONS:
 
 
 @router.post("/me/photo", summary="Upload your profile photo")
-async def upload_photo(file: UploadFile = File(...), p: Principal = Depends(require("portal.access")),
-                       db: AsyncSession = Depends(get_db)):
+async def upload_photo(file: UploadFile = File(...), p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     await enforce(f"photo:{p.id}", 20, 3600)
     user, profile = await _me(db, p)
-    m = await media.upload(db, data=await file.read(), filename=file.filename or "photo", folder="avatars",
-                           alt=user.full_name, images_only=True, actor=user.id)
+    m = await media.upload(
+        db, data=await file.read(), filename=file.filename or "photo", folder="avatars", alt=user.full_name, images_only=True, actor=user.id
+    )
     if profile.photo_id and (old := await db.get(Media, profile.photo_id)):
         old.deleted_at = svc.now()
     profile.photo_id = m.id
@@ -238,8 +272,7 @@ class ResubmitIn(BaseModel):
 
 
 @router.post("/me/verification", summary="Submit (or resubmit) your profile for verification")
-async def submit_verification(body: ResubmitIn, p: Principal = Depends(require("portal.access")),
-                              db: AsyncSession = Depends(get_db)):
+async def submit_verification(body: ResubmitIn, p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     user, profile = await _me(db, p)
     if profile.verification_status == "verified":
         raise conflict("ALREADY_VERIFIED", "Your profile is already verified.")
@@ -265,8 +298,9 @@ async def redeem_code(body: CodeIn, p: Principal = Depends(require("portal.acces
     if profile.verification_status == "verified":
         raise conflict("ALREADY_VERIFIED", "Your profile is already verified.")
     code = "".join(ch for ch in body.code.upper() if ch.isalnum())
-    vc = (await db.execute(select(VerificationCode).where(VerificationCode.code_hash == token_hash(code))
-                           .with_for_update())).scalar_one_or_none()
+    vc = (
+        await db.execute(select(VerificationCode).where(VerificationCode.code_hash == token_hash(code)).with_for_update())
+    ).scalar_one_or_none()
     if not vc or vc.revoked_at or (vc.expires_at and vc.expires_at <= svc.now()) or vc.uses >= vc.max_uses:
         await db.commit()  # keep the rate-limit context; nothing else changed
         raise AppError(400, "INVALID_CODE", "This code is not valid or has already been used.")
@@ -277,14 +311,12 @@ async def redeem_code(body: CodeIn, p: Principal = Depends(require("portal.acces
         if b and not profile.batch_id:
             profile.batch_id, profile.graduation_year = b.id, profile.graduation_year or b.graduation_year
     vc.uses += 1
-    await svc.approve(db, user, profile, method="institutional_code", actor_id=None,
-                      note=f"Code {vc.label} (…{vc.hint})")
+    await svc.approve(db, user, profile, method="institutional_code", actor_id=None, note=f"Code {vc.label} (…{vc.hint})")
     return {"data": await own_profile(db, user, profile)}
 
 
 @router.post("/me/verification/documents", status_code=201, summary="Attach a supporting document (kept private)")
-async def add_document(file: UploadFile = File(...), p: Principal = Depends(require("portal.access")),
-                       db: AsyncSession = Depends(get_db)):
+async def add_document(file: UploadFile = File(...), p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     await enforce(f"vdoc:{p.id}", 20, 3600)
     user, profile = await _me(db, p)
     if not (await svc.settings(db)).allow_verification_documents:
@@ -294,8 +326,7 @@ async def add_document(file: UploadFile = File(...), p: Principal = Depends(requ
     if len(profile.evidence_ids or []) >= 5:
         raise conflict("LIMIT_REACHED", "You can attach up to 5 documents.")
     data = await file.read()
-    m = await media.upload(db, data=data, filename=file.filename or "document", folder="verification",
-                           actor=user.id, private=True)
+    m = await media.upload(db, data=data, filename=file.filename or "document", folder="verification", actor=user.id, private=True)
     if not (m.mime.startswith("image/") or m.mime == "application/pdf"):
         m.deleted_at = svc.now()
         raise AppError(415, "UNSUPPORTED_FILE", "Attach a PDF or an image (JPG, PNG, WebP).")
@@ -304,8 +335,7 @@ async def add_document(file: UploadFile = File(...), p: Principal = Depends(requ
 
 
 @router.delete("/me/verification/documents/{media_id}", summary="Remove a supporting document")
-async def remove_document(media_id: uuid.UUID, p: Principal = Depends(require("portal.access")),
-                          db: AsyncSession = Depends(get_db)):
+async def remove_document(media_id: uuid.UUID, p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     _, profile = await _me(db, p)
     if str(media_id) not in (profile.evidence_ids or []):
         raise not_found("Document")
@@ -316,8 +346,7 @@ async def remove_document(media_id: uuid.UUID, p: Principal = Depends(require("p
 
 
 @router.get("/me/verification/documents/{media_id}", summary="Download one of your supporting documents")
-async def get_document(media_id: uuid.UUID, p: Principal = Depends(require("portal.access")),
-                       db: AsyncSession = Depends(get_db)):
+async def get_document(media_id: uuid.UUID, p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     _, profile = await _me(db, p)
     m = await db.get(Media, media_id)
     if str(media_id) not in (profile.evidence_ids or []) or not m or m.deleted_at:
@@ -327,11 +356,22 @@ async def get_document(media_id: uuid.UUID, p: Principal = Depends(require("port
 
 @router.get("/me/verification/history", summary="Your verification history")
 async def verification_history(p: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
-    rows = (await db.execute(select(VerificationEvent).where(VerificationEvent.user_id == p.id)
-                             .order_by(VerificationEvent.created_at.desc()).limit(50))).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(VerificationEvent).where(VerificationEvent.user_id == p.id).order_by(VerificationEvent.created_at.desc()).limit(50)
+            )
+        )
+        .scalars()
+        .all()
+    )
     member_notes = ("rejected", "revoked", "submitted", "resubmitted")  # decision notes of staff stay internal
-    return {"data": [{"action": r.action, "method": r.method, "note": r.note if r.action in member_notes else None,
-                      "created_at": r.created_at} for r in rows]}
+    return {
+        "data": [
+            {"action": r.action, "method": r.method, "note": r.note if r.action in member_notes else None, "created_at": r.created_at}
+            for r in rows
+        ]
+    }
 
 
 # ── directory ───────────────────────────────────────────────────────────────
@@ -345,24 +385,38 @@ def _location_public():
 
 @router.get("/directory", summary="Search the alumni directory", dependencies=[Depends(directory)])
 async def search_directory(
-    q: str | None = Query(None, max_length=100), batch: uuid.UUID | None = None,
-    year: int | None = Query(None, ge=1900, le=2100), year_from: int | None = Query(None, ge=1900, le=2100),
-    year_to: int | None = Query(None, ge=1900, le=2100), profession: str | None = Query(None, max_length=100),
-    organization: str | None = Query(None, max_length=100), industry: str | None = Query(None, max_length=100),
-    country: str | None = Query(None, max_length=100), city: str | None = Query(None, max_length=100),
-    kind: Literal["alumni", "student"] | None = None, verified_only: bool = False,
+    q: str | None = Query(None, max_length=100),
+    batch: uuid.UUID | None = None,
+    year: int | None = Query(None, ge=1900, le=2100),
+    year_from: int | None = Query(None, ge=1900, le=2100),
+    year_to: int | None = Query(None, ge=1900, le=2100),
+    profession: str | None = Query(None, max_length=100),
+    organization: str | None = Query(None, max_length=100),
+    industry: str | None = Query(None, max_length=100),
+    country: str | None = Query(None, max_length=100),
+    city: str | None = Query(None, max_length=100),
+    kind: Literal["alumni", "student"] | None = None,
+    verified_only: bool = False,
     sort: Literal["relevance", "name", "-year", "year", "recent"] = "relevance",
-    p: PageParams = Depends(page_params), me: Principal = Depends(require("portal.directory")),
+    p: PageParams = Depends(page_params),
+    me: Principal = Depends(require("portal.directory")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = (select(User, AlumniProfile).join(AlumniProfile, AlumniProfile.user_id == User.id)
-            .where(*await svc.directory_visible_clause(db), AlumniProfile.user_id != me.id))
+    stmt = (
+        select(User, AlumniProfile)
+        .join(AlumniProfile, AlumniProfile.user_id == User.id)
+        .where(*await svc.directory_visible_clause(db), AlumniProfile.user_id != me.id)
+    )
     connected = await svc.connected_ids(db, me.id)
     staff = me.can("alumni.view")
     if not staff:
         # hidden profiles never appear; connections-only profiles appear to connections
-        stmt = stmt.where(or_(AlumniProfile.visibility == "members",
-                              and_(AlumniProfile.visibility == "connections", AlumniProfile.user_id.in_(connected or [uuid.UUID(int=0)]))))
+        stmt = stmt.where(
+            or_(
+                AlumniProfile.visibility == "members",
+                and_(AlumniProfile.visibility == "connections", AlumniProfile.user_id.in_(connected or [uuid.UUID(int=0)])),
+            )
+        )
     rank = None
     if q and (tq := svc.tsquery(q)):
         query = func.to_tsquery("simple", tq)
@@ -381,17 +435,23 @@ async def search_directory(
     if verified_only:
         stmt = stmt.where(AlumniProfile.verification_status == "verified")
     # Filters on private sections only match members who show that section to everyone.
-    for value, col, public in ((profession, AlumniProfile.designation, _career_public),
-                               (organization, AlumniProfile.organization, _career_public),
-                               (industry, AlumniProfile.industry, _career_public),
-                               (country, AlumniProfile.country, _location_public),
-                               (city, AlumniProfile.city, _location_public)):
+    for value, col, public in (
+        (profession, AlumniProfile.designation, _career_public),
+        (organization, AlumniProfile.organization, _career_public),
+        (industry, AlumniProfile.industry, _career_public),
+        (country, AlumniProfile.country, _location_public),
+        (city, AlumniProfile.city, _location_public),
+    ):
         if value:
-            cond = func.lower(col).like(f"%{value.strip().lower().replace('%', '').replace('_', '')}%") \
-                if col in (AlumniProfile.designation, AlumniProfile.organization) else func.lower(col) == value.strip().lower()
+            cond = (
+                func.lower(col).like(f"%{value.strip().lower().replace('%', '').replace('_', '')}%")
+                if col in (AlumniProfile.designation, AlumniProfile.organization)
+                else func.lower(col) == value.strip().lower()
+            )
             stmt = stmt.where(cond if staff else and_(cond, public()))
     order = {
-        "name": [User.full_name.asc()], "-year": [AlumniProfile.graduation_year.desc().nulls_last(), User.full_name],
+        "name": [User.full_name.asc()],
+        "-year": [AlumniProfile.graduation_year.desc().nulls_last(), User.full_name],
         "year": [AlumniProfile.graduation_year.asc().nulls_last(), User.full_name],
         "recent": [AlumniProfile.verified_at.desc().nulls_last(), User.created_at.desc()],
         "relevance": [rank.desc(), User.full_name] if rank is not None else [AlumniProfile.completion.desc(), User.full_name],
@@ -403,8 +463,7 @@ async def search_directory(
     rel = await svc.relations(db, me.id, ids)
     names = await svc.batch_names(db, {pr.batch_id for _, pr in rows})
     data = [svc.card(u, pr, viewer, names.get(pr.batch_id), await svc.photo_out(db, pr.photo_id), rel[u.id]) for u, pr in rows]
-    return {"data": data, "meta": {"page": p.page, "page_size": p.page_size, "total": total,
-                                   "pages": max(1, -(-total // p.page_size))}}
+    return {"data": data, "meta": {"page": p.page, "page_size": p.page_size, "total": total, "pages": max(1, -(-total // p.page_size))}}
 
 
 @router.get("/directory/facets", summary="Filter options for the directory", dependencies=[Depends(directory)])
@@ -415,27 +474,50 @@ async def facets(_: Principal = Depends(require("portal.directory")), db: AsyncS
 
         async def top(col: str, public_key: str, limit: int = 60):
             c = joined.c[col]
-            rows = (await db.execute(select(c, func.count()).where(
-                c.is_not(None), func.coalesce(joined.c.privacy[public_key].astext, "members") == "members")
-                .group_by(c).order_by(func.count().desc(), c).limit(limit))).all()
+            rows = (
+                await db.execute(
+                    select(c, func.count())
+                    .where(c.is_not(None), func.coalesce(joined.c.privacy[public_key].astext, "members") == "members")
+                    .group_by(c)
+                    .order_by(func.count().desc(), c)
+                    .limit(limit)
+                )
+            ).all()
             return [{"value": v, "count": n} for v, n in rows]
 
-        years = (await db.execute(select(joined.c.graduation_year, func.count()).where(joined.c.graduation_year.is_not(None))
-                                  .group_by(joined.c.graduation_year).order_by(joined.c.graduation_year.desc()))).all()
-        batches = (await db.execute(select(Batch).where(Batch.is_active.is_(True)).order_by(
-            Batch.graduation_year.desc(), Batch.name))).scalars().all()
-        return {"countries": await top("country", "location"), "cities": await top("city", "location", 80),
-                "industries": await top("industry", "career"),
-                "years": [{"value": y, "count": n} for y, n in years],
-                "batches": [{"id": str(b.id), "name": b.name, "graduation_year": b.graduation_year} for b in batches]}
+        years = (
+            await db.execute(
+                select(joined.c.graduation_year, func.count())
+                .where(joined.c.graduation_year.is_not(None))
+                .group_by(joined.c.graduation_year)
+                .order_by(joined.c.graduation_year.desc())
+            )
+        ).all()
+        batches = (
+            (await db.execute(select(Batch).where(Batch.is_active.is_(True)).order_by(Batch.graduation_year.desc(), Batch.name)))
+            .scalars()
+            .all()
+        )
+        return {
+            "countries": await top("country", "location"),
+            "cities": await top("city", "location", 80),
+            "industries": await top("industry", "career"),
+            "years": [{"value": y, "count": n} for y, n in years],
+            "batches": [{"id": str(b.id), "name": b.name, "graduation_year": b.graduation_year} for b in batches],
+        }
 
     return {"data": await settings_store.cached("directory-facets", load)}
 
 
 # ── profiles, follows, reports ──────────────────────────────────────────────
 async def _target(db: AsyncSession, me: Principal, user_id: uuid.UUID) -> tuple[User, AlumniProfile, svc.Viewer]:
-    row = (await db.execute(select(User, AlumniProfile).join(AlumniProfile, AlumniProfile.user_id == User.id).where(
-        User.id == user_id, User.deleted_at.is_(None)))).first()
+    row = (
+        await db.execute(
+            select(User, AlumniProfile)
+            .join(AlumniProfile, AlumniProfile.user_id == User.id)
+            .where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).first()
     if not row:
         raise not_found("Profile")
     user, profile = row
@@ -449,8 +531,9 @@ async def _target(db: AsyncSession, me: Principal, user_id: uuid.UUID) -> tuple[
 
 
 @router.get("/profiles/{user_id}", summary="View an alumni profile (privacy applied)", dependencies=[Depends(directory)])
-async def view_profile(user_id: uuid.UUID, as_member: bool = False, me: Principal = Depends(require("portal.directory")),
-                       db: AsyncSession = Depends(get_db)):
+async def view_profile(
+    user_id: uuid.UUID, as_member: bool = False, me: Principal = Depends(require("portal.directory")), db: AsyncSession = Depends(get_db)
+):
     """`as_member=true` on your own profile shows it the way an unconnected member sees it (preview)."""
     user, profile, viewer = await _target(db, me, user_id)
     if as_member and user_id == me.id:
@@ -479,16 +562,23 @@ class ReportIn(BaseModel):
     details: str | None = Field(None, max_length=1000)
 
 
-@router.post("/profiles/{user_id}/report", status_code=201, summary="Report a profile to the administrators",
-             dependencies=[Depends(directory)])
-async def report_profile(user_id: uuid.UUID, body: ReportIn, me: Principal = Depends(require("portal.access")),
-                         db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/profiles/{user_id}/report", status_code=201, summary="Report a profile to the administrators", dependencies=[Depends(directory)]
+)
+async def report_profile(
+    user_id: uuid.UUID, body: ReportIn, me: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)
+):
     if user_id == me.id:
         raise conflict("SELF", "You cannot report your own profile.")
     await enforce(f"report:{me.id}", 10, 86400, "You have sent many reports today. Please try again tomorrow.")
     await _target(db, me, user_id)
-    open_ = (await db.execute(select(ProfileReport.id).where(ProfileReport.reporter_id == me.id, ProfileReport.user_id == user_id,
-                                                             ProfileReport.status == "open"))).first()
+    open_ = (
+        await db.execute(
+            select(ProfileReport.id).where(
+                ProfileReport.reporter_id == me.id, ProfileReport.user_id == user_id, ProfileReport.status == "open"
+            )
+        )
+    ).first()
     if open_:
         raise conflict("ALREADY_REPORTED", "You have already reported this profile. The administrators will review it.")
     db.add(ProfileReport(reporter_id=me.id, user_id=user_id, reason=body.reason, details=body.details))
@@ -514,8 +604,10 @@ async def connect(body: ConnectIn, me: Principal = Depends(require("portal.conne
     await enforce(f"connect:{me.id}", 50, 86400, "You have sent many requests today. Please try again tomorrow.")
     target, _, _ = await _target(db, me, body.user_id)
     lo, hi = sorted([me.id, target.id])  # PostgreSQL orders uuids bytewise, like Python
-    pair = and_(func.least(AlumniConnection.requester_id, AlumniConnection.addressee_id) == lo,
-                func.greatest(AlumniConnection.requester_id, AlumniConnection.addressee_id) == hi)
+    pair = and_(
+        func.least(AlumniConnection.requester_id, AlumniConnection.addressee_id) == lo,
+        func.greatest(AlumniConnection.requester_id, AlumniConnection.addressee_id) == hi,
+    )
     c = (await db.execute(select(AlumniConnection).where(pair).with_for_update())).scalar_one_or_none()
     if c and c.status == "accepted":
         raise conflict("ALREADY_CONNECTED", "You are already connected.")
@@ -536,9 +628,20 @@ async def connect(body: ConnectIn, me: Principal = Depends(require("portal.conne
         db.add(c)
     await db.flush()
     general = await settings_store.get_group(db, "general")
-    await messaging.queue_email(db, target.email, "alumni.connection_request", {
-        "name": target.full_name, "from": me.full_name, "message": body.message or "",
-        "link": f"{general.app_url}/portal/connections"}, target.language or "en")
+    await notifications.notify(
+        db,
+        target.id,
+        "connections",
+        "connection_request",
+        f"{me.full_name} wants to connect",
+        body=body.message or "",
+        link="/portal/connections/received",
+        actor_id=me.id,
+        email=(
+            "alumni.connection_request",
+            {"from": me.full_name, "message": body.message or "", "link": f"{general.app_url}/portal/connections"},
+        ),
+    )
     _notify(db, target.id, "connection:request", {"id": str(c.id), "user_id": str(me.id), "name": me.full_name})
     return {"data": {"id": str(c.id), "status": "pending"}}
 
@@ -547,7 +650,9 @@ async def connect(body: ConnectIn, me: Principal = Depends(require("portal.conne
 async def list_connections(
     type: Literal["received", "sent", "connected", "following", "followers"] = "connected",
     q: str | None = Query(None, max_length=100),
-    p: PageParams = Depends(page_params), me: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db),
+    p: PageParams = Depends(page_params),
+    me: Principal = Depends(require("portal.access")),
+    db: AsyncSession = Depends(get_db),
 ):
     C = AlumniConnection
     if type in ("received", "sent", "connected"):
@@ -558,14 +663,22 @@ async def list_connections(
         else:
             where = and_(C.status == "accepted", or_(C.requester_id == me.id, C.addressee_id == me.id))
             other = case((C.requester_id == me.id, C.addressee_id), else_=C.requester_id)
-        stmt = (select(User, AlumniProfile, C).join(C, other == User.id).join(AlumniProfile, AlumniProfile.user_id == User.id)
-                .where(where, User.deleted_at.is_(None)))
+        stmt = (
+            select(User, AlumniProfile, C)
+            .join(C, other == User.id)
+            .join(AlumniProfile, AlumniProfile.user_id == User.id)
+            .where(where, User.deleted_at.is_(None))
+        )
         order = C.created_at.desc()
     else:
         F = AlumniFollow
         other, mine = (F.followee_id, F.follower_id) if type == "following" else (F.follower_id, F.followee_id)
-        stmt = (select(User, AlumniProfile, F).join(F, other == User.id).join(AlumniProfile, AlumniProfile.user_id == User.id)
-                .where(mine == me.id, User.deleted_at.is_(None)))
+        stmt = (
+            select(User, AlumniProfile, F)
+            .join(F, other == User.id)
+            .join(AlumniProfile, AlumniProfile.user_id == User.id)
+            .where(mine == me.id, User.deleted_at.is_(None))
+        )
         order = F.created_at.desc()
     if q:
         stmt = stmt.where(func.lower(User.full_name).like(f"%{q.strip().lower()}%"))
@@ -584,12 +697,15 @@ async def list_connections(
             item["request_id"], item["message"] = str(link.id), link.message
         data.append(item)
     counts = {
-        "received": (await db.execute(select(func.count()).select_from(C).where(
-            C.addressee_id == me.id, C.status == "pending"))).scalar_one(),
+        "received": (
+            await db.execute(select(func.count()).select_from(C).where(C.addressee_id == me.id, C.status == "pending"))
+        ).scalar_one(),
         "connected": len(await svc.connected_ids(db, me.id)),
     }
-    return {"data": data, "meta": {"page": p.page, "page_size": p.page_size, "total": total,
-                                   "pages": max(1, -(-total // p.page_size)), "counts": counts}}
+    return {
+        "data": data,
+        "meta": {"page": p.page, "page_size": p.page_size, "total": total, "pages": max(1, -(-total // p.page_size)), "counts": counts},
+    }
 
 
 async def _own_request(db: AsyncSession, request_id: uuid.UUID, me: Principal) -> AlumniConnection:
@@ -607,9 +723,16 @@ async def accept(request_id: uuid.UUID, me: Principal = Depends(require("portal.
     c.status, c.responded_at = "accepted", svc.now()
     requester = await db.get(User, c.requester_id)
     general = await settings_store.get_group(db, "general")
-    await messaging.queue_email(db, requester.email, "alumni.connection_accepted", {
-        "name": requester.full_name, "from": me.full_name, "link": f"{general.app_url}/portal/alumni/{me.id}"},
-        requester.language or "en")
+    await notifications.notify(
+        db,
+        requester.id,
+        "connections",
+        "connection_accepted",
+        f"{me.full_name} accepted your connection request",
+        link=f"/portal/alumni/{me.id}",
+        actor_id=me.id,
+        email=("alumni.connection_accepted", {"from": me.full_name, "link": f"{general.app_url}/portal/alumni/{me.id}"}),
+    )
     _notify(db, requester.id, "connection:accepted", {"user_id": str(me.id), "name": me.full_name})
     return {"data": {"id": str(c.id), "status": "accepted"}}
 
@@ -624,12 +747,9 @@ async def decline(request_id: uuid.UUID, me: Principal = Depends(require("portal
 
 
 @router.delete("/connections/{request_id}", summary="Withdraw a request or remove a connection", dependencies=[Depends(directory)])
-async def remove_connection(request_id: uuid.UUID, me: Principal = Depends(require("portal.access")),
-                            db: AsyncSession = Depends(get_db)):
+async def remove_connection(request_id: uuid.UUID, me: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     c = await _own_request(db, request_id, me)
     if c.status != "accepted" and c.requester_id != me.id:
         raise conflict("NOT_ALLOWED", "Decline the request instead.")
     await db.delete(c)
     return {"data": {"ok": True}}
-
-

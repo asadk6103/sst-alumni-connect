@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Medal, Shield, UserCog, UserRound, Users } from 'lucide-react';
+import { Bell, HandHeart, Images, LayoutDashboard, LogOut, Medal, Shield, UserCog, UserRound, Users } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/components/ui/display';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/components/ui/overlay';
@@ -23,6 +23,9 @@ export function UserMenu({ light }: { light?: boolean }) {
         <MenuItem onSelect={() => nav('/portal/profile')}><UserRound />My profile</MenuItem>
         {can('portal.directory') && <MenuItem onSelect={() => nav('/portal/connections')}><Users />My network</MenuItem>}
         <MenuItem onSelect={() => nav('/portal/achievements')}><Medal />Achievements</MenuItem>
+        <MenuItem onSelect={() => nav('/portal/donations')}><HandHeart />Donations &amp; giving</MenuItem>
+        <MenuItem onSelect={() => nav('/portal/gallery')}><Images />Gallery</MenuItem>
+        <MenuItem onSelect={() => nav('/portal/notifications')}><Bell />Notifications</MenuItem>
         <MenuItem onSelect={() => nav('/portal/account')}><UserCog />Account settings</MenuItem>
         <MenuItem onSelect={() => nav('/portal/account/security')}><Shield />Security</MenuItem>
         {user.is_staff && <MenuItem onSelect={() => nav('/admin')}><LayoutDashboard />Administration</MenuItem>}

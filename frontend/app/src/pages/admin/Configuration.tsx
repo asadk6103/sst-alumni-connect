@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Bell, Blocks, Building2, GraduationCap, LayoutDashboard, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
+import { ArrowDown, ArrowUp, Bell, Blocks, HandHeart, Building2, GraduationCap, LayoutDashboard, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
   RotateCcw, Save, Send, Shield, Upload, Users, XCircle } from 'lucide-react';
 import { api, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -19,6 +19,7 @@ const SECTIONS = [
   { key: 'security', label: 'Authentication & security', icon: Shield, perm: 'settings.view' },
   { key: 'alumni', label: 'Alumni & registration', icon: GraduationCap, perm: 'settings.view' },
   { key: 'dashboard', label: 'Dashboard widgets', icon: LayoutDashboard, perm: 'settings.view' },
+  { key: 'donations', label: 'Donations', icon: HandHeart, perm: 'donations.view' },
   { key: 'realtime', label: 'Real-time & messaging', icon: RadioTower, perm: 'settings.view' },
   { key: 'modules', label: 'Modules', icon: Blocks, perm: 'modules.view' },
   { key: 'flags', label: 'Feature flags', icon: Flag, perm: 'feature_flags.view' },
@@ -53,6 +54,7 @@ export function ConfigurationPage() {
             : section === 'realtime' ? <SettingsGroup group="realtime" />
             : section === 'alumni' ? <SettingsGroup group="alumni" />
             : section === 'dashboard' ? <DashboardWidgets />
+            : section === 'donations' ? <SettingsGroup group="donations" />
             : section === 'branding' ? <BrandingEditor />
             : section === 'modules' ? <ModulesPanel />
             : section === 'flags' ? <FlagsPanel />
@@ -67,7 +69,19 @@ export function ConfigurationPage() {
 // ── settings groups ─────────────────────────────────────────────────────────
 type FieldDef = { key: string; label: string; type: 'text' | 'number' | 'email' | 'bool' | 'select' | 'list' | 'textarea'; options?: [string, string][]; hint?: string; wide?: boolean };
 
-const GROUPS: Record<'general' | 'security' | 'realtime' | 'alumni', { title: string; fields: FieldDef[] }> = {
+const GROUPS: Record<'general' | 'security' | 'realtime' | 'alumni' | 'donations', { title: string; fields: FieldDef[] }> = {
+  donations: { title: 'Donations', fields: [
+    { key: 'bank_name', label: 'Bank name', type: 'text' },
+    { key: 'account_title', label: 'Account title', type: 'text' },
+    { key: 'iban', label: 'IBAN', type: 'text' },
+    { key: 'account_number', label: 'Account number', type: 'text' },
+    { key: 'branch', label: 'Branch', type: 'text', wide: true },
+    { key: 'other_methods', label: 'Other ways to give', type: 'textarea', wide: true, hint: 'e.g. cash or cheque at the alumni office' },
+    { key: 'instructions', label: 'Payment instructions', type: 'textarea', wide: true },
+    { key: 'receipt_footer', label: 'Receipt footer', type: 'textarea', wide: true, hint: 'e.g. tax exemption note' },
+    { key: 'min_amount', label: 'Minimum donation', type: 'number' },
+    { key: 'show_donor_wall', label: 'Thank donors on campaign pages (with their consent)', type: 'bool' },
+  ] },
   alumni: { title: 'Alumni & registration', fields: [
     { key: 'registration_open', label: 'Registration is open', type: 'bool' },
     { key: 'allow_student_registration', label: 'Current students may register', type: 'bool' },
@@ -130,7 +144,7 @@ const GROUPS: Record<'general' | 'security' | 'realtime' | 'alumni', { title: st
   ] },
 };
 
-function SettingsGroup({ group }: { group: 'general' | 'security' | 'realtime' | 'alumni' }) {
+function SettingsGroup({ group }: { group: 'general' | 'security' | 'realtime' | 'alumni' | 'donations' }) {
   const { can } = useAuth();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings', group], queryFn: () => api<{ data: Record<string, unknown>; meta: { restart_required_fields: string[] } }>(`/api/v1/admin/config/settings/${group}`) });
@@ -140,7 +154,7 @@ function SettingsGroup({ group }: { group: 'general' | 'security' | 'realtime' |
   const save = useAction(() => api<{ meta: { restart_required: string[] } }>(`/api/v1/admin/config/settings/${group}`, { method: 'PUT', body: form }),
     { success: 'Settings saved.', invalidate: [['settings', group]], onSuccess: (r) => { setRestart(r.meta.restart_required); qc.invalidateQueries({ queryKey: ['site'] }); } });
   const def = GROUPS[group];
-  const editable = can('settings.configure');
+  const editable = can('settings.configure') || (group === 'donations' && can('donations.configure'));
   const restartFields = q.data?.meta.restart_required_fields ?? [];
   if (!form) return <Skeleton className="h-96 rounded-card" />;
   return (

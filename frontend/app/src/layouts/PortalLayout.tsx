@@ -8,6 +8,7 @@ import { LiveProvider } from '@/lib/live';
 import { useSite } from '@/lib/site';
 import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand';
+import { NotificationBell } from '@/components/notifications';
 import { UserMenu } from './UserMenu';
 
 type Item = { to: string; label: string; end?: boolean; perm?: string; module?: string };
@@ -51,7 +52,7 @@ export function PortalLayout() {
             {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(false)}>{i.label}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
             {user?.is_staff && <NavLink to="/admin" className={link(false)}>Administration</NavLink>}
           </nav>
-          <div className="ml-auto"><UserMenu light /></div>
+          <div className="ml-auto flex items-center gap-2"><NotificationBell light /><UserMenu light /></div>
         </div>
         {open && (
           <nav aria-label="Portal" className="border-t border-white/10 px-4 py-2 xl:hidden">

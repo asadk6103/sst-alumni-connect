@@ -18,7 +18,7 @@ from ...core.errors import AppError, conflict, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import AlumniProfile, Batch, Event, EventAttendance, EventFeedback, EventMedia, EventRegistration, User
-from ...services import live, media, messaging
+from ...services import live, media, messaging, notifications
 from ..community.service import authors
 from . import service as svc
 
@@ -400,12 +400,9 @@ async def cancel_event(
         )
     ).all()
     for _reg, u in regs:
-        await messaging.queue_email(
-            db,
-            u.email,
-            "events.cancelled",
-            {"name": u.full_name, "event": ev.title, "reason": body.reason, "link": f"{general.app_url}/portal/events"},
-            u.language or "en",
+        await notifications.notify(
+            db, u.id, "events", "cancelled", f"Cancelled: {ev.title}", body=body.reason, link="/portal/events",
+            email=("events.cancelled", { "event": ev.title, "reason": body.reason, "link": f"{general.app_url}/portal/events"}),
         )
     await record(
         db,
@@ -651,18 +648,15 @@ async def send_reminders(db: AsyncSession) -> int:
             .all()
         )
         for u in regs:
-            await messaging.queue_email(
-                db,
-                u.email,
-                "events.reminder",
-                {
-                    "name": u.full_name,
+            await notifications.notify(
+                db, u.id, "events", "reminder", f"Tomorrow: {ev.title}", link=f"/portal/events/{ev.id}",
+                email=("events.reminder", {
+                    
                     "event": ev.title,
                     "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
                     "where": "Online — the link is on the event page" if ev.is_online else (ev.venue or ""),
                     "link": f"{general.app_url}/portal/events/{ev.id}",
-                },
-                u.language or "en",
+                }),
             )
             sent += 1
         ev.reminder_sent_at = now

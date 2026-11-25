@@ -1,11 +1,12 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Activity, BadgeCheck, Briefcase, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
+import { Activity, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
   X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
 import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand';
+import { NotificationBell } from '@/components/notifications';
 import { UserMenu } from './UserMenu';
 
 type NavItem = { to: string; label: string; icon: ComponentType<{ className?: string }>; perms: string[]; end?: boolean };
@@ -21,12 +22,15 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/jobs', label: 'Jobs & Internships', icon: Briefcase, perms: ['jobs.view'] },
   { to: '/admin/mentorship', label: 'Mentorship', icon: UsersRound, perms: ['mentorship.view'] },
   { to: '/admin/achievements', label: 'Alumni Achievements', icon: Medal, perms: ['achievements.view'] },
+  { to: '/admin/donations', label: 'Donations & Scholarships', icon: HandHeart, perms: ['donations.view', 'scholarships.view'] },
+  { to: '/admin/gallery', label: 'Gallery', icon: Images, perms: ['gallery.view'] },
+  { to: '/admin/newsletters', label: 'Newsletters', icon: Newspaper, perms: ['communications.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },
   { to: '/admin/roles', label: 'Roles & Permissions', icon: KeyRound, perms: ['roles.view'] },
   { to: '/admin/media', label: 'Media Library', icon: ImageIcon, perms: ['media.view'] },
   { to: '/admin/communications', label: 'Communication Center', icon: Mail, perms: ['communications.view'] },
   { to: '/admin/configuration', label: 'System Configuration', icon: Settings,
-    perms: ['settings.view', 'branding.view', 'integrations.view', 'modules.view', 'feature_flags.view'] },
+    perms: ['settings.view', 'branding.view', 'integrations.view', 'modules.view', 'feature_flags.view', 'donations.view'] },
   { to: '/admin/audit', label: 'Audit Logs', icon: FileClock, perms: ['audit.view'] },
   { to: '/admin/health', label: 'System Health', icon: Activity, perms: ['health.view'] },
 ];
@@ -83,6 +87,7 @@ export function AdminLayout() {
           </div>
           <div className="flex items-center gap-3">
             <Link to="/portal" className="hidden text-sm font-medium text-ink-muted hover:text-ink sm:block">Alumni Portal</Link>
+            <NotificationBell />
             <UserMenu />
           </div>
         </header>

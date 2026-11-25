@@ -151,3 +151,52 @@ DEFAULT_TEMPLATES += [
        "<p>Would you like it to appear on the public website too? You can choose on the achievement page.</p>" + _btn("View and choose"),
        ["name", "title", "kind", "link"]),
 ]
+
+
+def simple_html(text: str) -> str:
+    """Safe rich text for newsletters and stories: everything is escaped first, then a small syntax is applied —
+    '# '/'## ' headings, '- ' bullet lists, **bold**, *italic*, [label](https://link) and bare https:// links."""
+    out, items = [], []
+
+    def inline(s: str) -> str:
+        s = html.escape(s)
+        s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+        s = re.sub(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)", r"<em>\1</em>", s)
+        s = re.sub(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", r'<a href="\2">\1</a>', s)
+        s = re.sub(r'(?<!href=")(https?://[^\s<]+)', r'<a href="\1">\1</a>', s)
+        return s
+
+    def flush():
+        if items:
+            out.append("<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>")
+            items.clear()
+
+    for block in re.split(r"\n\s*\n", text.strip()):
+        for line in block.split("\n"):
+            if line.startswith("- "):
+                items.append(inline(line[2:]))
+                continue
+            flush()
+            if line.startswith("## "):
+                out.append(f'<h3 style="margin:18px 0 6px">{inline(line[3:])}</h3>')
+            elif line.startswith("# "):
+                out.append(f'<h2 style="margin:20px 0 8px">{inline(line[2:])}</h2>')
+            elif line.strip():
+                out.append(f"<p>{inline(line)}</p>")
+        flush()
+    return "\n".join(out)
+
+
+DEFAULT_TEMPLATES += [
+    _t("newsletter.confirm", "Newsletter confirmation", "Confirm your {{app_name}} newsletter subscription",
+       "<p>Hello {{name}},</p><p>Please confirm that you would like to receive the {{app_name}} newsletter.</p>" + _btn("Confirm subscription")
+       + "<p>If you did not ask for this, ignore this email.</p>", ["name", "link"]),
+    _t("donations.pledged", "Donation pledge", "Thank you for your pledge — {{reference}}",
+       "<p>Hello {{name}},</p><p>Thank you for pledging <strong>{{amount}}</strong> to {{campaign}}.</p>"
+       "<p>Please pay using:</p><blockquote>{{bank}}</blockquote><p>{{instructions}}<br>Reference: <strong>{{reference}}</strong></p>"
+       "<p>We will email your receipt once the payment is received.</p>" + _btn("My donations"),
+       ["name", "amount", "campaign", "bank", "instructions", "reference", "link"]),
+    _t("donations.receipt", "Donation receipt", "Receipt {{receipt}} — thank you",
+       "<p>Hello {{name}},</p><p>We received your donation of <strong>{{amount}}</strong>. Thank you for supporting SST.</p>"
+       "<p>Receipt number: {{receipt}}</p>" + _btn("View and print receipt"), ["name", "amount", "receipt", "link"]),
+]

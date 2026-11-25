@@ -33,6 +33,13 @@ const JobApplicationsPage = lazy(() => jbp().then((m) => ({ default: m.JobApplic
 const mnp = () => import('@/pages/portal/Mentorship');
 const MentorshipPage = lazy(() => mnp().then((m) => ({ default: m.MentorshipPage })));
 const MentorshipRequestPage = lazy(() => mnp().then((m) => ({ default: m.MentorshipRequestPage })));
+const gvp = () => import('@/pages/portal/Giving');
+const GivingPage = lazy(() => gvp().then((m) => ({ default: m.GivingPage })));
+const CampaignPage = lazy(() => gvp().then((m) => ({ default: m.CampaignPage })));
+const GalleryPage = lazy(() => gvp().then((m) => ({ default: m.GalleryPage })));
+const AlbumPage = lazy(() => gvp().then((m) => ({ default: m.AlbumPage })));
+const NotificationsPage = lazy(() => import('@/pages/portal/Notifications').then((m) => ({ default: m.NotificationsPage })));
+const NewsletterPage = lazy(() => import('@/pages/auth/Newsletter').then((m) => ({ default: m.NewsletterPage })));
 const acp = () => import('@/pages/portal/Achievements');
 const AchievementsPage = lazy(() => acp().then((m) => ({ default: m.AchievementsPage })));
 const AchievementPage = lazy(() => acp().then((m) => ({ default: m.AchievementPage })));
@@ -53,6 +60,10 @@ const VerificationPage = lazy(() => import('@/pages/admin/Verification').then((m
 const BatchesPage = lazy(() => import('@/pages/admin/Batches').then((m) => ({ default: m.BatchesPage })));
 const CommunityAdminPage = lazy(() => import('@/pages/admin/Community').then((m) => ({ default: m.CommunityAdminPage })));
 const eng = () => import('@/pages/admin/Engagement');
+const inst = () => import('@/pages/admin/Institutional');
+const DonationsAdminPage = lazy(() => inst().then((m) => ({ default: m.DonationsAdminPage })));
+const NewslettersAdminPage = lazy(() => inst().then((m) => ({ default: m.NewslettersAdminPage })));
+const GalleryAdminPage = lazy(() => inst().then((m) => ({ default: m.GalleryAdminPage })));
 const EventsAdminPage = lazy(() => eng().then((m) => ({ default: m.EventsAdminPage })));
 const JobsAdminPage = lazy(() => eng().then((m) => ({ default: m.JobsAdminPage })));
 const MentorshipAdminPage = lazy(() => eng().then((m) => ({ default: m.MentorshipAdminPage })));
@@ -92,6 +103,7 @@ export function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/register" element={<Suspense fallback={<FullPageSpinner />}><RegisterPage /></Suspense>} />
+      <Route path="/newsletter/:action" element={<Suspense fallback={<FullPageSpinner />}><NewsletterPage /></Suspense>} />
 
       <Route path="/admin" element={<RequireAuth staff><AdminLayout /></RequireAuth>}>
         <Route index element={<RequirePerm perms={perm('/admin')}><AdminDashboard /></RequirePerm>} />
@@ -103,6 +115,9 @@ export function App() {
         <Route path="jobs/:tab?" element={<RequirePerm perms={perm('/admin/jobs')}><JobsAdminPage /></RequirePerm>} />
         <Route path="mentorship" element={<RequirePerm perms={perm('/admin/mentorship')}><MentorshipAdminPage /></RequirePerm>} />
         <Route path="achievements" element={<RequirePerm perms={perm('/admin/achievements')}><AchievementsAdminPage /></RequirePerm>} />
+        <Route path="donations/:tab?" element={<RequirePerm perms={perm('/admin/donations')}><DonationsAdminPage /></RequirePerm>} />
+        <Route path="newsletters" element={<RequirePerm perms={perm('/admin/newsletters')}><NewslettersAdminPage /></RequirePerm>} />
+        <Route path="gallery" element={<RequirePerm perms={perm('/admin/gallery')}><GalleryAdminPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />
@@ -136,6 +151,12 @@ export function App() {
         <Route path="mentorship/requests/:id" element={<Lazy><MentorshipRequestPage /></Lazy>} />
         <Route path="achievements" element={<Lazy><AchievementsPage /></Lazy>} />
         <Route path="achievements/:id" element={<Lazy><AchievementPage /></Lazy>} />
+        <Route path="donations" element={<Lazy><GivingPage /></Lazy>} />
+        <Route path="donations/tab/:tab" element={<Lazy><GivingPage /></Lazy>} />
+        <Route path="donations/:id" element={<Lazy><CampaignPage /></Lazy>} />
+        <Route path="gallery" element={<Lazy><GalleryPage /></Lazy>} />
+        <Route path="gallery/:id" element={<Lazy><AlbumPage /></Lazy>} />
+        <Route path="notifications" element={<Lazy><NotificationsPage /></Lazy>} />
         <Route path="account/:section?" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

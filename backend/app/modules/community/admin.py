@@ -334,7 +334,19 @@ async def decide_group(
     g.status = {"approve": "active", "reject": "archived", "archive": "archived", "restore": "active"}[body.action]
     db.add(ModerationAction(actor_id=me.id, target_type="group", target_id=str(g.id), action=body.action, reason=body.reason))
     if g.created_by and body.action in ("approve", "reject"):
-        live.emit_to_user(db, g.created_by, "group:decision", {"id": str(g.id), "name": g.name, "approved": body.action == "approve"})
+        from ...services import notifications
+
+        approved = body.action == "approve"
+        await notifications.notify(
+            db,
+            g.created_by,
+            "community",
+            "group_decision",
+            f"Your group “{g.name}” was {'approved' if approved else 'not approved'}",
+            body=body.reason or "",
+            link=f"/portal/community/groups/{g.id}" if approved else "/portal/community/groups",
+        )
+        live.emit_to_user(db, g.created_by, "group:decision", {"id": str(g.id), "name": g.name, "approved": approved})
     await record(
         db,
         actor_id=me.id,

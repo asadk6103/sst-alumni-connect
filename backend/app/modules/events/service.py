@@ -10,7 +10,7 @@ from ...core import settings_store
 from ...core.deps import Principal
 from ...core.errors import not_found
 from ...models import AlumniProfile, Batch, Event, EventFeedback, EventMedia, EventRegistration, Media, User
-from ...services import live, media, messaging
+from ...services import live, media, notifications
 
 KINDS = {
     "reunion": "Annual reunion",
@@ -138,17 +138,13 @@ async def promote_waitlist(db: AsyncSession, ev: Event) -> int:
         ev.registered_count += 1 + nxt.guests
         promoted += 1
         u = await db.get(User, nxt.user_id)
-        await messaging.queue_email(
-            db,
-            u.email,
-            "events.promoted",
-            {
-                "name": u.full_name,
+        await notifications.notify(
+            db, u.id, "events", "promoted", f"A place opened up: {ev.title}", link=f"/portal/events/{ev.id}",
+            email=("events.promoted", {
                 "event": ev.title,
                 "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
                 "link": f"{general.app_url}/portal/events/{ev.id}",
-            },
-            u.language or "en",
+            }),
         )
         live.emit_to_user(db, u.id, "event:registration", {"event_id": str(ev.id), "status": "registered"})
 

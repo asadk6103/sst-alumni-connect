@@ -185,3 +185,18 @@ async def deliver(db: AsyncSession, channel: str, payload: dict) -> None:
         if entry:
             entry.status, entry.error = "failed", str(e)[:500]
         raise
+
+
+async def queue_html_email(db: AsyncSession, to: str, subject: str, content_html: str, label: str, footer_html: str = "") -> int:
+    """Queue an email whose (already safe) HTML was composed in the app, e.g. a newsletter issue."""
+    general = await settings_store.get_group(db, "general")
+    brand = await settings_store.branding(db)
+    body = wrap_email(content_html + footer_html, general.app_name, brand.colors.primary)
+    entry = NotificationLog(channel="email", recipient=to, template=label, subject=subject[:250], status="queued",
+                            payload={"to": to, "subject": subject, "html": body})
+    db.add(entry)
+    await db.flush()
+    from ..worker import dispatch
+
+    dispatch("app.tasks.send_email", {"log_id": entry.id, **entry.payload}, after_commit_of=db)
+    return entry.id

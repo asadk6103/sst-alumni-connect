@@ -100,6 +100,21 @@ class AlumniSettings(BaseModel):
     terms_url: str | None = Field(None, max_length=300)
 
 
+class DonationSettings(BaseModel):
+    """Offline payment details shown to donors until an online gateway is configured and verified."""
+
+    bank_name: str = Field("", max_length=100)
+    account_title: str = Field("", max_length=150)
+    account_number: str = Field("", max_length=50)
+    iban: str = Field("", max_length=40)
+    branch: str = Field("", max_length=150)
+    other_methods: str = Field("Cash or cheque at the alumni office.", max_length=500)
+    instructions: str = Field("Quote your donation reference with the transfer so we can match it.", max_length=1000)
+    receipt_footer: str = Field("", max_length=500)
+    min_amount: int = Field(100, ge=1, le=10_000_000)
+    show_donor_wall: bool = True
+
+
 # key: (title, description) — widgets of modules that are not delivered yet are added with their module.
 DASHBOARD_WIDGETS: dict[str, tuple[str, str]] = {
     "welcome": ("Welcome banner", "Greeting with the dashboard banner image."),
@@ -185,6 +200,7 @@ SETTINGS_GROUPS: dict[str, type[BaseModel]] = {
     "realtime": RealtimeSettings,
     "alumni": AlumniSettings,
     "dashboard": DashboardSettings,
+    "donations": DonationSettings,
 }
 
 RESTART_FIELDS = {"realtime": ["max_connections_per_gateway", "heartbeat_interval_seconds", "connection_timeout_seconds"]}

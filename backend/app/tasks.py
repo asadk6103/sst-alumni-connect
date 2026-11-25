@@ -104,4 +104,31 @@ async def _event_reminders(db) -> int:
 def event_reminders():
     return _run(_event_reminders)
 
+
+async def _send_newsletter(db, newsletter_id: str) -> int:
+    import uuid
+
+    from .modules.institutional.newsletters import send_issue
+
+    return await send_issue(db, uuid.UUID(newsletter_id))
+
+
+@celery_app.task(name="app.tasks.send_newsletter")
+def send_newsletter(payload: dict):
+    return _run(_send_newsletter, payload["newsletter_id"])
+
+
+async def _scheduled_newsletters(db) -> int:
+    from .modules.institutional.newsletters import due_issues, send_issue
+
+    sent = 0
+    for nid in await due_issues(db):
+        sent += await send_issue(db, nid)
+    return sent
+
+
+@celery_app.task(name="app.tasks.scheduled_newsletters")
+def scheduled_newsletters():
+    return _run(_scheduled_newsletters)
+
 __all__ = ["dispatch"]

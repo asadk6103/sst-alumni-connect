@@ -27,6 +27,7 @@ celery_app.conf.update(
         "outbox-sweep": {"task": "app.tasks.sweep_outbox", "schedule": 60.0},
         "cleanup": {"task": "app.tasks.cleanup", "schedule": 3600.0},
         "event-reminders": {"task": "app.tasks.event_reminders", "schedule": 900.0},
+        "newsletters": {"task": "app.tasks.scheduled_newsletters", "schedule": 60.0},
     },
 )
 

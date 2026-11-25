@@ -18,7 +18,7 @@ from ...core.errors import AppError, conflict, forbidden, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import AlumniProfile, Mentor, MentorshipFeedback, MentorshipRequest, MentorshipSession, User
-from ...services import live, messaging
+from ...services import live, notifications
 from ..community.service import authors
 
 router = APIRouter(prefix="/api/v1/mentorship", tags=["Mentorship"], dependencies=[Depends(require_module("mentorship"))])
@@ -338,13 +338,35 @@ def session_out(s: MentorshipSession, r: MentorshipRequest, me: Principal) -> di
     }
 
 
+class _Blank(dict):
+    def __missing__(self, key):
+        return ""
+
+
+TITLES = {
+    "mentorship.request": "{from} asked you for mentorship",
+    "mentorship.accepted": "{mentor} accepted your mentorship request",
+    "mentorship.declined": "{mentor} declined your mentorship request",
+    "mentorship.cancelled": "{mentee} cancelled the mentorship",
+    "mentorship.completed": "{by} marked the mentorship as completed",
+    "mentorship.session": "{by} scheduled a session on {when}",
+    "mentorship.mentor_approved": "You are now a mentor",
+    "mentorship.mentor_rejected": "Your mentor application was not approved",
+}
+
+
 async def _notify(db: AsyncSession, user_id: uuid.UUID, template: str, data: dict, path: str) -> None:
-    u = await db.get(User, user_id)
-    if not u:
-        return
     general = await settings_store.get_group(db, "general")
-    await messaging.queue_email(
-        db, u.email, template, {"name": u.full_name, **data, "link": f"{general.app_url}{path}"}, u.language or "en"
+    title = TITLES.get(template, "Mentorship update").format_map(_Blank(data))
+    await notifications.notify(
+        db,
+        user_id,
+        "mentorship",
+        template,
+        title,
+        body=data.get("topic", "") or data.get("note", ""),
+        link=path,
+        email=(template, {**data, "link": f"{general.app_url}{path}"}),
     )
     live.emit_to_user(db, user_id, "mentorship:update", {"template": template})
 

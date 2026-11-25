@@ -17,7 +17,7 @@ from ...core.errors import AppError, conflict, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import CareerResource, Employer, JobApplication, JobCategory, JobPost, Media, Resume, SavedJob, User
-from ...services import media, messaging
+from ...services import media, notifications
 from ..community.service import authors
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Jobs"], dependencies=[Depends(require_module("jobs"))])
@@ -478,17 +478,18 @@ async def apply(
     await db.flush()
     if j.posted_by and (poster := await db.get(User, j.posted_by)):
         general = await settings_store.get_group(db, "general")
-        await messaging.queue_email(
+        await notifications.notify(
             db,
-            poster.email,
-            "jobs.application_received",
-            {
-                "name": poster.full_name,
-                "applicant": me.full_name,
-                "job": j.title,
-                "link": f"{general.app_url}/portal/jobs/{j.id}/applications",
-            },
-            poster.language or "en",
+            poster.id,
+            "jobs",
+            "application_received",
+            f"{me.full_name} applied for {j.title}",
+            link=f"/portal/jobs/{j.id}/applications",
+            actor_id=me.id,
+            email=(
+                "jobs.application_received",
+                {"applicant": me.full_name, "job": j.title, "link": f"{general.app_url}/portal/jobs/{j.id}/applications"},
+            ),
         )
     return {"data": {"id": str(a.id), "status": a.status}}
 
@@ -581,18 +582,22 @@ async def update_application(app_id: uuid.UUID, body: AppUpdate, me: Principal =
     if changed:
         u = await db.get(User, a.user_id)
         general = await settings_store.get_group(db, "general")
-        await messaging.queue_email(
+        await notifications.notify(
             db,
-            u.email,
-            "jobs.application_status",
-            {
-                "name": u.full_name,
-                "job": j.title,
-                "organization": j.organization,
-                "status": a.status.replace("_", " "),
-                "link": f"{general.app_url}/portal/jobs/applications",
-            },
-            u.language or "en",
+            u.id,
+            "jobs",
+            "application_status",
+            f"Your application for {j.title}: {a.status}",
+            link="/portal/jobs/tab/applications",
+            email=(
+                "jobs.application_status",
+                {
+                    "job": j.title,
+                    "organization": j.organization,
+                    "status": a.status.replace("_", " "),
+                    "link": f"{general.app_url}/portal/jobs/tab/applications",
+                },
+            ),
         )
     await db.flush()
     people = await authors(db, {a.user_id})
@@ -691,12 +696,18 @@ async def _decide_job(db: AsyncSession, me: Principal, job_id: uuid.UUID, approv
     j.rejection_reason = None if approve else reason
     if j.posted_by and j.posted_by != me.id and (u := await db.get(User, j.posted_by)):
         general = await settings_store.get_group(db, "general")
-        await messaging.queue_email(
+        await notifications.notify(
             db,
-            u.email,
-            "jobs.approved" if approve else "jobs.rejected",
-            {"name": u.full_name, "job": j.title, "reason": reason or "", "link": f"{general.app_url}/portal/jobs/{j.id}"},
-            u.language or "en",
+            u.id,
+            "jobs",
+            "job_approved" if approve else "job_rejected",
+            f"Your job is live: {j.title}" if approve else f"Your job needs changes: {j.title}",
+            body=reason or "",
+            link=f"/portal/jobs/{j.id}",
+            email=(
+                "jobs.approved" if approve else "jobs.rejected",
+                {"job": j.title, "reason": reason or "", "link": f"{general.app_url}/portal/jobs/{j.id}"},
+            ),
         )
     await record(
         db,

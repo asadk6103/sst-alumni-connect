@@ -45,6 +45,19 @@ from .engagement import (
     SavedJob,
 )
 from .identity import LoginAttempt, Permission, Role, Session, User, UserVerification, role_permissions, user_roles
+from .institutional import (
+    Album,
+    AlbumPhoto,
+    Campaign,
+    Donation,
+    Newsletter,
+    NewsletterDelivery,
+    NewsletterSubscriber,
+    Notification,
+    NotificationPreference,
+    Scholarship,
+    ScholarshipAward,
+)
 from .messaging import (
     BlockedUser,
     Conversation,
@@ -58,6 +71,17 @@ from .messaging import (
 
 __all__ = [
     "Base",
+    "ScholarshipAward",
+    "Scholarship",
+    "NotificationPreference",
+    "Notification",
+    "NewsletterSubscriber",
+    "NewsletterDelivery",
+    "Newsletter",
+    "Donation",
+    "Campaign",
+    "AlbumPhoto",
+    "Album",
     "SavedJob",
     "Resume",
     "MentorshipSession",

@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-24 · Current stage: **4 — Institutional support (next)** · Stages 1–3 complete
+Last updated: 2026-11-24 · Current stage: **5 — Administration (next)** · Stages 1–4 complete
 
 ## Stage plan
 
@@ -9,13 +9,37 @@ Last updated: 2026-11-24 · Current stage: **4 — Institutional support (next)*
 | 1 Foundation | architecture, repository, Docker Compose, database, authentication, RBAC, setup wizard, branding, configuration center core | ✅ built & tested locally |
 | 2 Alumni core | registration (alumni fields, institutional record matching), verification, profiles, batches, directory, alumni dashboard | ✅ built & tested locally |
 | 3 Engagement | community feed (real-time), messaging, groups, events + QR check-in, jobs, mentorship, achievements | ✅ built & tested locally |
-| 4 Institutional | donations (gateway-less until providers are chosen), scholarships, newsletters, notifications, gallery | ⏳ |
+| 4 Institutional | donations (gateway-less until providers are chosen), scholarships, newsletters, notifications, gallery | ✅ built & tested locally |
 | 5 Administration | CMS + drag-and-drop page builder, navigation builder, custom fields, localisation (Urdu/RTL), reports & exports | ⏳ |
 | 6 Production readiness | security testing, load tests at target scale, HTTPS overlay, handbooks, ERD, checklist | ⏳ |
 
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
 payments on hold, generic HTTP SMS provider, students both self-register and are imported, p95 latency
 budget 200 ms for API reads.
+
+## Completed (Stage 4 — Institutional support)
+
+**Notifications** — in-app notification centre (bell with unread badge, full page, mark read / all, delete), live push after
+commit, per-category preferences for in-app and email (connections, verification, community, events, jobs, mentorship,
+achievements, donations); every member-facing email now goes through these preferences (security emails always send).
+
+**Donations** — campaigns for the seven spec categories with goal, dates, image and progress; pledges with a unique
+reference and the bank transfer / cash / cheque details from System Configuration → Donations; finance confirms receipt
+(payment reference, notes) which issues a numbered receipt (printable page, emailed), updates campaign totals and donor
+count; offline donations recorded directly; anonymous gifts; donor wall only with consent; cancel, refund; statistics by
+month and purpose; CSV export. **Payment gateways stay disabled** (as decided) — no card data is ever handled; the
+configuration for providers remains for when credentials are supplied and verified.
+
+**Scholarships** — funds with criteria, amount and sponsor, linked fundraising campaigns, awards recorded privately by
+finance staff (recipients never shown to members), awards CSV.
+
+**Newsletters** — public double opt-in (confirm link), member opt-in / out, one-click unsubscribe in every issue,
+composing with a safe formatting syntax (all input escaped), preview, test send, audiences (subscribers + verified alumni,
+verified alumni, one batch), send now or schedule (Celery beat), resumable sending that never mails an address twice,
+subscriber list, CSV export and consent-based import.
+
+**Gallery** — albums (members-only or public), multi-photo upload with captions, cover choice, publish / unpublish, portal
+gallery with a photo viewer and public endpoints for the website.
 
 ## Completed (Stage 3 — Engagement)
 
@@ -144,6 +168,16 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
 - `0004_engagement` — events, event_registrations, event_attendance, event_media, event_feedback, employers,
   job_categories, job_posts, job_applications, saved_jobs, resumes, career_resources, mentors, mentorship_requests,
   mentorship_sessions, mentorship_feedback, achievements.
+- `0005_institutional` — notifications, notification_preferences, donation_campaigns, donations, scholarships,
+  scholarship_awards, newsletter_subscribers, newsletters, newsletter_deliveries, gallery_albums, gallery_photos.
+
+## Test results — Stage 4 (2026-11-25, local)
+- Backend automated tests: **37 passed** (adds notifications and preferences, donations from pledge to receipt and
+  refund, scholarships privacy, newsletter double opt-in / safe rendering / resumable sending / unsubscribe, gallery
+  visibility). Lint: clean.
+- Browser walk-through (`e2e-stage4.mjs`): bank details → campaign → pledge with transfer instructions → finance confirms →
+  receipt and bell notification → newsletter compose / preview / send → album with photos → member gallery → mobile: **pass,
+  no page errors**.
 
 ## Test results — Stage 3 (2026-11-25, local)
 - Backend automated tests: **33 passed** (community feed / reactions / comments / shares / moderation, groups and
@@ -190,7 +224,7 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
 ## Deployment status
 Not yet deployed. Commands for the first run are in README.md.
 
-## API endpoints (Stages 1–3: 267)
+## API endpoints (Stages 1–4: 331)
 
 | Area | Endpoint | Purpose |
 |---|---|---|
@@ -255,6 +289,17 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: configuration | `PUT /api/v1/admin/config/settings/{group}` | Save a settings group |
 | Admin: configuration | `PUT /api/v1/admin/config/templates/{template_id}` | Edit a template |
 | Admin: dashboard | `GET /api/v1/admin/dashboard` | Headline figures for the admin dashboard |
+| Admin: donations | `GET /api/v1/admin/donations/campaigns` | All campaigns |
+| Admin: donations | `GET /api/v1/admin/donations/export` | Export donations (CSV) |
+| Admin: donations | `GET /api/v1/admin/donations/stats` | Donation statistics |
+| Admin: donations | `GET /api/v1/admin/donations/{donation_id}/receipt` | Receipt (staff) |
+| Admin: donations | `GET /api/v1/admin/donations` | Donations and pledges |
+| Admin: donations | `POST /api/v1/admin/donations/campaigns/{campaign_id}/status` | Open, close or unpublish a campaign |
+| Admin: donations | `POST /api/v1/admin/donations/campaigns` | Create a campaign (draft) |
+| Admin: donations | `POST /api/v1/admin/donations/{donation_id}/confirm` | Confirm that a pledge was received (issues the receipt) |
+| Admin: donations | `POST /api/v1/admin/donations/{donation_id}/status` | Cancel a pledge or mark a donation as refunded |
+| Admin: donations | `POST /api/v1/admin/donations` | Record a donation received offline (issues the receipt) |
+| Admin: donations | `PUT /api/v1/admin/donations/campaigns/{campaign_id}` | Edit a campaign |
 | Admin: events | `DELETE /api/v1/admin/events/{event_id}/checkin/{user_id}` | Undo a check-in |
 | Admin: events | `DELETE /api/v1/admin/events/{event_id}/media/{media_id}` | Remove a gallery photo |
 | Admin: events | `DELETE /api/v1/admin/events/{event_id}` | Delete a draft event |
@@ -269,6 +314,15 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: events | `POST /api/v1/admin/events/{event_id}/publish` | Publish an event |
 | Admin: events | `POST /api/v1/admin/events` | Create an event (draft) |
 | Admin: events | `PUT /api/v1/admin/events/{event_id}` | Update an event |
+| Admin: gallery | `DELETE /api/v1/admin/gallery/{album_id}/photos/{media_id}` | Remove a photo |
+| Admin: gallery | `DELETE /api/v1/admin/gallery/{album_id}` | Delete an album |
+| Admin: gallery | `GET /api/v1/admin/gallery/{album_id}` | An album (staff) |
+| Admin: gallery | `GET /api/v1/admin/gallery` | All albums |
+| Admin: gallery | `PATCH /api/v1/admin/gallery/{album_id}/photos/{media_id}` | Edit a caption |
+| Admin: gallery | `POST /api/v1/admin/gallery/{album_id}/photos` | Add a photo |
+| Admin: gallery | `POST /api/v1/admin/gallery/{album_id}/publish` | Publish or unpublish |
+| Admin: gallery | `POST /api/v1/admin/gallery` | Create an album (draft) |
+| Admin: gallery | `PUT /api/v1/admin/gallery/{album_id}` | Edit an album |
 | Admin: jobs | `DELETE /api/v1/admin/jobs/categories/{category_id}` | Remove a job category |
 | Admin: jobs | `DELETE /api/v1/admin/jobs/resources/{resource_id}` | Delete a career resource |
 | Admin: jobs | `DELETE /api/v1/admin/jobs/{job_id}` | Delete a job |
@@ -290,11 +344,30 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: mentorship | `GET /api/v1/admin/mentorship/mentors` | Mentor applications and mentors |
 | Admin: mentorship | `GET /api/v1/admin/mentorship/requests` | All mentorships |
 | Admin: mentorship | `POST /api/v1/admin/mentorship/mentors/{user_id}/decide` | Approve or reject a mentor application |
+| Admin: newsletters | `DELETE /api/v1/admin/newsletters/{newsletter_id}` | Delete a draft |
+| Admin: newsletters | `GET /api/v1/admin/newsletters/subscribers/export` | Export subscribers (CSV) |
+| Admin: newsletters | `GET /api/v1/admin/newsletters/subscribers/list` | Subscribers |
+| Admin: newsletters | `GET /api/v1/admin/newsletters/{newsletter_id}` | One newsletter |
+| Admin: newsletters | `GET /api/v1/admin/newsletters` | Newsletters |
+| Admin: newsletters | `POST /api/v1/admin/newsletters/subscribers/import` | Import subscribers who consented elsewhere (CSV: email, name) |
+| Admin: newsletters | `POST /api/v1/admin/newsletters/{newsletter_id}/cancel` | Cancel a scheduled newsletter (back to draft) |
+| Admin: newsletters | `POST /api/v1/admin/newsletters/{newsletter_id}/preview` | Rendered HTML of the issue |
+| Admin: newsletters | `POST /api/v1/admin/newsletters/{newsletter_id}/send` | Send now or schedule |
+| Admin: newsletters | `POST /api/v1/admin/newsletters/{newsletter_id}/test` | Send a test copy to yourself |
+| Admin: newsletters | `POST /api/v1/admin/newsletters` | Create a newsletter (draft) |
+| Admin: newsletters | `PUT /api/v1/admin/newsletters/{newsletter_id}` | Edit a draft or scheduled newsletter |
 | Admin: roles and permissions | `DELETE /api/v1/admin/roles/{role_id}` | Delete a custom role |
 | Admin: roles and permissions | `GET /api/v1/admin/roles/catalogue` | All permissions grouped by module |
 | Admin: roles and permissions | `GET /api/v1/admin/roles` | List roles |
 | Admin: roles and permissions | `POST /api/v1/admin/roles` | Create a custom role |
 | Admin: roles and permissions | `PUT /api/v1/admin/roles/{role_id}` | Update a role's name, description and permissions |
+| Admin: scholarships | `DELETE /api/v1/admin/scholarships/{scholarship_id}` | Delete a scholarship without awards |
+| Admin: scholarships | `GET /api/v1/admin/scholarships/export` | Export scholarship awards (CSV) |
+| Admin: scholarships | `GET /api/v1/admin/scholarships/{scholarship_id}/awards` | Awards of a scholarship (private) |
+| Admin: scholarships | `GET /api/v1/admin/scholarships` | All scholarships |
+| Admin: scholarships | `POST /api/v1/admin/scholarships/{scholarship_id}/awards` | Record a scholarship award |
+| Admin: scholarships | `POST /api/v1/admin/scholarships` | Create a scholarship |
+| Admin: scholarships | `PUT /api/v1/admin/scholarships/{scholarship_id}` | Edit a scholarship |
 | Admin: student records | `DELETE /api/v1/admin/student-records/{record_id}` | Delete a student record |
 | Admin: student records | `GET /api/v1/admin/student-records/template` | CSV template for the import |
 | Admin: student records | `GET /api/v1/admin/student-records` | Browse imported student records |
@@ -383,12 +456,21 @@ Not yet deployed. Commands for the first run are in README.md.
 | Community | `POST /api/v1/community/reports` | Report a post or comment to the moderators |
 | Community | `POST /api/v1/community/uploads` | Upload a photo for a post |
 | Community | `PUT /api/v1/community/posts/{post_id}/reaction` | React to a post (replaces your previous reaction) |
+| Donations | `GET /api/v1/donations/campaigns/{campaign_id}` | A campaign with progress and donor recognition |
+| Donations | `GET /api/v1/donations/campaigns` | Active fundraising campaigns |
+| Donations | `GET /api/v1/donations/mine` | Your donation history |
+| Donations | `GET /api/v1/donations/payment-info` | How to pay (bank transfer and other methods) |
+| Donations | `GET /api/v1/donations/{donation_id}/receipt` | Printable receipt for a confirmed donation |
+| Donations | `POST /api/v1/donations/pledges` | Pledge a donation (you then pay by bank transfer, cash or cheque) |
+| Donations | `POST /api/v1/donations/{donation_id}/cancel` | Cancel a pledge you have not paid yet |
 | Events | `GET /api/v1/events/{event_id}/calendar.ics` | Add to calendar (iCalendar file) |
 | Events | `GET /api/v1/events/{event_id}` | Event details (meeting link for registered attendees) |
 | Events | `GET /api/v1/events` | Events (upcoming, past or yours) |
 | Events | `POST /api/v1/events/{event_id}/cancel` | Cancel your registration |
 | Events | `POST /api/v1/events/{event_id}/register` | Register (joins the waitlist when the event is full) |
 | Events | `PUT /api/v1/events/{event_id}/feedback` | Rate an event you attended |
+| Gallery | `GET /api/v1/gallery/albums/{album_id}` | An album with its photos |
+| Gallery | `GET /api/v1/gallery/albums` | Published albums |
 | Health | `GET /api/v1/admin/health` | System health, queue backlog and recent API latency (p50/p95/p99) |
 | Health | `GET /api/v1/health/live` | Liveness probe |
 | Health | `GET /api/v1/health/ready` | Readiness probe (database + Redis) |
@@ -451,10 +533,26 @@ Not yet deployed. Commands for the first run are in README.md.
 | Messaging | `PUT /api/v1/messages/blocks/{user_id}` | Block a member (they can no longer message you) |
 | Messaging | `PUT /api/v1/messages/conversations/{conv_id}/settings` | Mute, archive or pin a conversation (for you) |
 | Messaging | `PUT /api/v1/messages/{message_id}/reactions/{emoji}` | React to a message |
+| Newsletter | `GET /api/v1/newsletter/me` | Your newsletter subscription |
+| Newsletter | `PUT /api/v1/newsletter/me` | Subscribe or unsubscribe |
+| Notifications | `DELETE /api/v1/notifications/{notification_id}` | Delete a notification |
+| Notifications | `GET /api/v1/notifications/preferences` | Your notification preferences |
+| Notifications | `GET /api/v1/notifications/unread-count` | Number of unread notifications |
+| Notifications | `GET /api/v1/notifications` | Your notifications (newest first) |
+| Notifications | `POST /api/v1/notifications/read-all` | Mark all as read |
+| Notifications | `POST /api/v1/notifications/{notification_id}/read` | Mark one notification as read |
+| Notifications | `PUT /api/v1/notifications/preferences` | Update your notification preferences |
 | Public | `GET /api/v1/public/achievements` | Published achievements the members agreed to show publicly |
+| Public | `GET /api/v1/public/campaigns` | Active campaigns for the public website |
+| Public | `GET /api/v1/public/gallery/{album_id}` | A public album |
+| Public | `GET /api/v1/public/gallery` | Public albums for the website |
 | Public | `GET /api/v1/public/site` | Site identity, published branding, enabled modules |
+| Public | `POST /api/v1/public/newsletter/confirm` | Confirm a subscription |
+| Public | `POST /api/v1/public/newsletter/subscribe` | Subscribe to the newsletter (a confirmation email is sent) |
+| Public | `POST /api/v1/public/newsletter/unsubscribe` | Unsubscribe (one click from any newsletter) |
 | Registration | `GET /api/v1/public/batches` | Active batches (for registration and filters) |
 | Registration | `POST /api/v1/auth/register` | Register as an alumnus or current student |
+| Scholarships | `GET /api/v1/scholarships` | Scholarship funds |
 | Setup wizard | `GET /api/v1/setup/status` | Is installation required? Includes environment checks. |
 | Setup wizard | `POST /api/v1/setup/complete` | Finish installation: settings + first administrator |
 | Setup wizard | `POST /api/v1/setup/test-email` | Test SMTP settings before saving |

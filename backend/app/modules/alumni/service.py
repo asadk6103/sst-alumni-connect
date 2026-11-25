@@ -27,7 +27,7 @@ from ...models import (
     User,
     VerificationEvent,
 )
-from ...services import media, messaging
+from ...services import media
 
 VERIFIED_ROLE = {"alumni": "verified_alumni", "student": "student"}
 UNVERIFIED_ROLE = "unverified_alumni"
@@ -168,8 +168,11 @@ async def approve(db: AsyncSession, user: User, profile: AlumniProfile, *, metho
     await log(db, user.id, "approved", method, note, actor_id)
     if notify:
         general = await settings_store.get_group(db, "general")
-        await messaging.queue_email(db, user.email, "alumni.verified", {
-            "name": user.full_name, "link": f"{general.app_url}/portal"}, user.language or "en")
+        from ...services import notifications
+
+        await notifications.notify(db, user.id, "verification", "verified", "Your profile is verified", link="/portal",
+                                   body="Welcome to the alumni community.",
+                                   email=("alumni.verified", {"link": f"{general.app_url}/portal"}))
     await refresh_search(db, user.id)
 
 
@@ -184,9 +187,11 @@ async def reject(db: AsyncSession, user: User, profile: AlumniProfile, *, reason
     await set_member_role(db, user, profile.kind, False)
     await log(db, user.id, "revoked" if revoke else "rejected", None, reason, actor_id)
     general = await settings_store.get_group(db, "general")
-    await messaging.queue_email(db, user.email, "alumni.rejected", {
-        "name": user.full_name, "reason": reason, "link": f"{general.app_url}/portal/profile/verification"},
-        user.language or "en")
+    from ...services import notifications
+
+    await notifications.notify(db, user.id, "verification", "rejected", "Your verification needs attention", body=reason,
+                               link="/portal/profile/verification",
+                               email=("alumni.rejected", {"reason": reason, "link": f"{general.app_url}/portal/profile/verification"}))
     await refresh_search(db, user.id)
 
 
