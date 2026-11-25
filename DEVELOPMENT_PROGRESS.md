@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-24 · Current stage: **5 — Administration (next)** · Stages 1–4 complete
+Last updated: 2026-11-25 · Current stage: **6 — Production readiness (next)** · Stages 1–5 complete
 
 ## Stage plan
 
@@ -16,6 +16,48 @@ Last updated: 2026-11-24 · Current stage: **5 — Administration (next)** · St
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
 payments on hold, generic HTTP SMS provider, students both self-register and are imported, p95 latency
 budget 200 ms for API reads.
+
+## Completed (Stage 5 — Administration)
+
+**CMS & page builder** — public pages built from 13 block types (hero, image + text, rich text, statistics with live
+figures, alumni profiles, featured alumni, events, news, gallery, testimonials, call to action, contact, newsletter).
+Drag-and-drop ordering (plus up/down buttons), hide / duplicate / delete blocks, draft vs published versions (editing
+never changes the live page until published), publish now or schedule, unpublish, discard draft, duplicate page,
+slug management with reserved paths, SEO title / description with search-result preview, featured image, preview on
+the real website in an iframe with desktop / tablet / mobile widths (short-lived signed preview link). Rich text is
+escaped on the server, then a small formatting syntax is applied (no HTML injection). Link fields accept only paths,
+https, mailto and tel. Home page is selectable (Configuration → Public website).
+
+**News & announcements** — news, announcements and success stories; drafts, publish / schedule, pin, members-only
+posts (portal only), SEO fields, cover image; website and portal feeds with related articles.
+
+**Navigation builder** — header menu (one level of sub-links) and footer links; website sections, pages or web
+addresses; Urdu labels; links to unpublished pages are hidden automatically.
+
+**Website** (Next.js) — shared header / footer from the menus and settings, language switch, CMS pages at `/<slug>`,
+`/news`, `/news/<slug>`, `/events`, `/events/<id>` (no meeting links, batch-only events excluded), `/gallery`,
+`/gallery/<id>`, `/distinguished-alumni` (consent only), `/contact` (form with honeypot and rate limit → admin inbox +
+email to the office), `/newsletter`, `/preview`, 404 page, `sitemap.xml`, `robots.txt`, Open Graph metadata.
+
+**Custom fields** — field builder for alumni profiles (and registration), job posts, events, mentor profiles and
+donations; 12 types; required, visibility (public / members / connections / owner + staff), validation (length,
+range, pattern, choice counts, custom message), conditional visibility, ordering, Urdu labels. Values are stored in a
+JSONB column per entity — no schema change per field. Server validation with per-field errors; file answers are
+private and opened only by people allowed to see the field. Forms and display added to registration, profile
+(Additional details), job form/page, event editor/page, mentor form/profile and the donation pledge.
+
+**Localisation** — English and Urdu built in, more languages from the admin screen; translation editor with search,
+"untranslated only", CSV export / import; member's language saved on the account; right-to-left layout and Urdu fonts.
+The administration console stays in English. A test keeps the frontend keys and the catalogue in sync.
+
+**Reports & analytics** — 13 reports (registration trends, graduation year, location, profession, organisation,
+engagement, events, mentorship, jobs, donations, scholarships, profile completion, verification) with date presets and
+custom ranges, charts (line, bar, horizontal bar, donut with tooltips and legends), data tables, CSV / Excel / PDF
+exports (built-in writers, no extra libraries) and print layout. Reports are aggregates only; staff without access to
+alumni records see groups under 3 merged into "Other". Every export is audit-logged.
+
+**Configuration centre** — new sections: Public website (home page, footer, social links, events, contact form) and
+Languages & translations. **Audit logs** cover all new administrative actions.
 
 ## Completed (Stage 4 — Institutional support)
 
@@ -170,6 +212,17 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
   mentorship_sessions, mentorship_feedback, achievements.
 - `0005_institutional` — notifications, notification_preferences, donation_campaigns, donations, scholarships,
   scholarship_awards, newsletter_subscribers, newsletters, newsletter_deliveries, gallery_albums, gallery_photos.
+- `0006_administration` — cms_pages, news_posts, nav_menus, contact_messages, custom_fields, languages, translations;
+  `custom_fields` JSONB on alumni_profiles, job_posts, events, mentors, donations.
+
+## Test results — Stage 5 (2026-11-25, local)
+- Backend automated tests: **44 passed** (adds pages draft / preview / publish / schedule / home-page protection and
+  link safety, news and members-only posts, navigation, contact form with honeypot and rate limit, custom fields
+  validation / conditions / visibility / private files, localisation overrides and CSV import, all 13 reports with
+  CSV / Excel / PDF exports and small-group suppression, frontend translation keys). Lint: clean.
+- Browser walk-through (`e2e-stage5.mjs`): page builder → preview (desktop, mobile) → publish → menu link on the
+  website → news → contact form → inbox → custom field answered by a member → Urdu RTL → reports with Excel / PDF →
+  website and admin at 390 px: **pass, no page errors**.
 
 ## Test results — Stage 4 (2026-11-25, local)
 - Backend automated tests: **37 passed** (adds notifications and preferences, donations from pledge to receipt and
@@ -218,13 +271,12 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
   confirm pinned image tags (postgres 16.6, redis 7.4.1, MinIO 2024-10-13, mailpit 1.21.8, k6 0.55.0).
 - HTTPS: terminate TLS in front of nginx for now; a TLS overlay is planned for Stage 6.
 - Payment providers intentionally not implemented (on hold).
-- Navigation builder, CMS/page builder, custom fields, translations UI: Stage 5.
 
 
 ## Deployment status
 Not yet deployed. Commands for the first run are in README.md.
 
-## API endpoints (Stages 1–4: 331)
+## API endpoints (Stages 1–5: 387)
 
 | Area | Endpoint | Purpose |
 |---|---|---|
@@ -288,6 +340,11 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: configuration | `PUT /api/v1/admin/config/modules/{key}` | Enable or disable a module (data is kept) |
 | Admin: configuration | `PUT /api/v1/admin/config/settings/{group}` | Save a settings group |
 | Admin: configuration | `PUT /api/v1/admin/config/templates/{template_id}` | Edit a template |
+| Admin: custom fields | `DELETE /api/v1/admin/custom-fields/{field_id}` | Delete a custom field (stored answers are kept but no longer shown) |
+| Admin: custom fields | `GET /api/v1/admin/custom-fields` | List custom fields of a form |
+| Admin: custom fields | `POST /api/v1/admin/custom-fields` | Add a custom field |
+| Admin: custom fields | `PUT /api/v1/admin/custom-fields/order` | Reorder the fields of a form |
+| Admin: custom fields | `PUT /api/v1/admin/custom-fields/{field_id}` | Edit a custom field (its key and form cannot change) |
 | Admin: dashboard | `GET /api/v1/admin/dashboard` | Headline figures for the admin dashboard |
 | Admin: donations | `GET /api/v1/admin/donations/campaigns` | All campaigns |
 | Admin: donations | `GET /api/v1/admin/donations/export` | Export donations (CSV) |
@@ -336,6 +393,14 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: jobs | `POST /api/v1/admin/jobs/{job_id}/approve` | Approve and list a job |
 | Admin: jobs | `POST /api/v1/admin/jobs/{job_id}/reject` | Reject a job (the poster can correct and resubmit) |
 | Admin: jobs | `PUT /api/v1/admin/jobs/resources/{resource_id}` | Edit a career resource |
+| Admin: localization | `DELETE /api/v1/admin/localization/languages/{code}` | Remove a language and its translations |
+| Admin: localization | `GET /api/v1/admin/localization/languages` | All languages |
+| Admin: localization | `GET /api/v1/admin/localization/translations/{code}/export` | Download translations as CSV (key, English, translation) |
+| Admin: localization | `GET /api/v1/admin/localization/translations/{code}` | Strings of a language with their English source |
+| Admin: localization | `POST /api/v1/admin/localization/languages` | Add a language |
+| Admin: localization | `POST /api/v1/admin/localization/translations/{code}/import` | Upload a translations CSV (key, english, translation) |
+| Admin: localization | `PUT /api/v1/admin/localization/languages/{code}` | Edit a language |
+| Admin: localization | `PUT /api/v1/admin/localization/translations/{code}` | Save translations (empty value restores the built-in text) |
 | Admin: media library | `DELETE /api/v1/admin/media/{media_id}` | Delete a file (kept in storage until purged) |
 | Admin: media library | `GET /api/v1/admin/media` | Browse the media library |
 | Admin: media library | `PATCH /api/v1/admin/media/{media_id}` | Edit alternative text |
@@ -344,6 +409,12 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: mentorship | `GET /api/v1/admin/mentorship/mentors` | Mentor applications and mentors |
 | Admin: mentorship | `GET /api/v1/admin/mentorship/requests` | All mentorships |
 | Admin: mentorship | `POST /api/v1/admin/mentorship/mentors/{user_id}/decide` | Approve or reject a mentor application |
+| Admin: news | `DELETE /api/v1/admin/news/{news_id}` | Delete an article |
+| Admin: news | `GET /api/v1/admin/news/{news_id}` | An article |
+| Admin: news | `GET /api/v1/admin/news` | Articles |
+| Admin: news | `POST /api/v1/admin/news/{news_id}/publish` | Publish now, schedule, or return to draft |
+| Admin: news | `POST /api/v1/admin/news` | Write an article (draft) |
+| Admin: news | `PUT /api/v1/admin/news/{news_id}` | Edit an article |
 | Admin: newsletters | `DELETE /api/v1/admin/newsletters/{newsletter_id}` | Delete a draft |
 | Admin: newsletters | `GET /api/v1/admin/newsletters/subscribers/export` | Export subscribers (CSV) |
 | Admin: newsletters | `GET /api/v1/admin/newsletters/subscribers/list` | Subscribers |
@@ -356,6 +427,19 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: newsletters | `POST /api/v1/admin/newsletters/{newsletter_id}/test` | Send a test copy to yourself |
 | Admin: newsletters | `POST /api/v1/admin/newsletters` | Create a newsletter (draft) |
 | Admin: newsletters | `PUT /api/v1/admin/newsletters/{newsletter_id}` | Edit a draft or scheduled newsletter |
+| Admin: pages | `DELETE /api/v1/admin/cms/pages/{page_id}` | Delete a page |
+| Admin: pages | `GET /api/v1/admin/cms/pages/{page_id}` | A page with its draft |
+| Admin: pages | `GET /api/v1/admin/cms/pages` | Pages |
+| Admin: pages | `POST /api/v1/admin/cms/pages/{page_id}/discard` | Discard draft changes (back to the published version) |
+| Admin: pages | `POST /api/v1/admin/cms/pages/{page_id}/duplicate` | Copy a page as a new draft |
+| Admin: pages | `POST /api/v1/admin/cms/pages/{page_id}/preview-token` | A short-lived link to preview the draft on the website |
+| Admin: pages | `POST /api/v1/admin/cms/pages/{page_id}/publish` | Publish the draft now or at a scheduled time |
+| Admin: pages | `POST /api/v1/admin/cms/pages/{page_id}/unpublish` | Take a page off the website (kept as a draft) |
+| Admin: pages | `POST /api/v1/admin/cms/pages` | Create a page (as a draft) |
+| Admin: pages | `PUT /api/v1/admin/cms/pages/{page_id}` | Save the draft (the published version is unchanged until you publish) |
+| Admin: reports | `GET /api/v1/admin/reports/{key}/export` | Export a report as CSV, Excel or PDF |
+| Admin: reports | `GET /api/v1/admin/reports/{key}` | Run a report |
+| Admin: reports | `GET /api/v1/admin/reports` | Available reports |
 | Admin: roles and permissions | `DELETE /api/v1/admin/roles/{role_id}` | Delete a custom role |
 | Admin: roles and permissions | `GET /api/v1/admin/roles/catalogue` | All permissions grouped by module |
 | Admin: roles and permissions | `GET /api/v1/admin/roles` | List roles |
@@ -382,6 +466,11 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: users | `POST /api/v1/admin/users/{user_id}/sign-out` | End all sessions of a user |
 | Admin: users | `POST /api/v1/admin/users/{user_id}/unlock` | Clear a sign-in lockout |
 | Admin: users | `POST /api/v1/admin/users` | Create a user |
+| Admin: website | `DELETE /api/v1/admin/website/messages/{message_id}` | Delete a message |
+| Admin: website | `GET /api/v1/admin/website/messages` | Messages from the website contact form |
+| Admin: website | `GET /api/v1/admin/website/navigation` | Website menus |
+| Admin: website | `PATCH /api/v1/admin/website/messages/{message_id}` | Mark a message read, replied or spam |
+| Admin: website | `PUT /api/v1/admin/website/navigation/{key}` | Save a menu |
 | Alumni portal | `DELETE /api/v1/alumni/connections/{request_id}` | Withdraw a request or remove a connection |
 | Alumni portal | `DELETE /api/v1/alumni/me/achievements/{item_id}` | Remove an entry from your achievements |
 | Alumni portal | `DELETE /api/v1/alumni/me/education/{item_id}` | Remove an entry from your education |
@@ -456,6 +545,9 @@ Not yet deployed. Commands for the first run are in README.md.
 | Community | `POST /api/v1/community/reports` | Report a post or comment to the moderators |
 | Community | `POST /api/v1/community/uploads` | Upload a photo for a post |
 | Community | `PUT /api/v1/community/posts/{post_id}/reaction` | React to a post (replaces your previous reaction) |
+| Custom fields | `GET /api/v1/custom-fields/{entity}/{record_id}/{key}/file` | Open a file attached to a custom field |
+| Custom fields | `GET /api/v1/custom-fields/{entity}` | Active custom fields of a form |
+| Custom fields | `POST /api/v1/custom-fields/files` | Upload a file for a file field (kept private) |
 | Donations | `GET /api/v1/donations/campaigns/{campaign_id}` | A campaign with progress and donor recognition |
 | Donations | `GET /api/v1/donations/campaigns` | Active fundraising campaigns |
 | Donations | `GET /api/v1/donations/mine` | Your donation history |
@@ -533,6 +625,8 @@ Not yet deployed. Commands for the first run are in README.md.
 | Messaging | `PUT /api/v1/messages/blocks/{user_id}` | Block a member (they can no longer message you) |
 | Messaging | `PUT /api/v1/messages/conversations/{conv_id}/settings` | Mute, archive or pin a conversation (for you) |
 | Messaging | `PUT /api/v1/messages/{message_id}/reactions/{emoji}` | React to a message |
+| News | `GET /api/v1/news/{slug}` | An article |
+| News | `GET /api/v1/news` | News and announcements (includes members-only posts) |
 | Newsletter | `GET /api/v1/newsletter/me` | Your newsletter subscription |
 | Newsletter | `PUT /api/v1/newsletter/me` | Subscribe or unsubscribe |
 | Notifications | `DELETE /api/v1/notifications/{notification_id}` | Delete a notification |
@@ -544,9 +638,23 @@ Not yet deployed. Commands for the first run are in README.md.
 | Notifications | `PUT /api/v1/notifications/preferences` | Update your notification preferences |
 | Public | `GET /api/v1/public/achievements` | Published achievements the members agreed to show publicly |
 | Public | `GET /api/v1/public/campaigns` | Active campaigns for the public website |
+| Public | `GET /api/v1/public/custom-fields/registration` | Extra questions asked on the registration form |
+| Public | `GET /api/v1/public/events/{event_id}` | An upcoming event (registration happens in the portal) |
+| Public | `GET /api/v1/public/events` | Upcoming events for the website |
 | Public | `GET /api/v1/public/gallery/{album_id}` | A public album |
 | Public | `GET /api/v1/public/gallery` | Public albums for the website |
+| Public | `GET /api/v1/public/home` | The website home page (null = the built-in landing page) |
+| Public | `GET /api/v1/public/i18n/{code}` | Interface strings for a language |
+| Public | `GET /api/v1/public/languages` | Languages offered in the interface |
+| Public | `GET /api/v1/public/news/{slug}` | A published article |
+| Public | `GET /api/v1/public/news` | Published news for the website |
+| Public | `GET /api/v1/public/pages/{slug}` | A published page, ready to render |
+| Public | `GET /api/v1/public/preview` | Preview a draft with a link from the page editor |
 | Public | `GET /api/v1/public/site` | Site identity, published branding, enabled modules |
+| Public | `GET /api/v1/public/sitemap` | Published pages and news for the sitemap |
+| Public | `GET /api/v1/public/stats` | Headline figures for the website |
+| Public | `GET /api/v1/public/website` | Menus, footer and contact details for the website |
+| Public | `POST /api/v1/public/contact` | Send a message to the alumni office |
 | Public | `POST /api/v1/public/newsletter/confirm` | Confirm a subscription |
 | Public | `POST /api/v1/public/newsletter/subscribe` | Subscribe to the newsletter (a confirmation email is sent) |
 | Public | `POST /api/v1/public/newsletter/unsubscribe` | Unsubscribe (one click from any newsletter) |
