@@ -12,3 +12,13 @@
   body { @apply bg-canvas font-sans text-ink antialiased; }
   h1, h2, h3 { @apply font-heading; }
 }
+
+/* Article and page text (server-escaped HTML with a small formatting syntax). */
+.prose-site { color: rgb(var(--ink)); line-height: 1.8; font-size: 1.0625rem; }
+.prose-site h2 { font-family: var(--font-heading), Poppins, sans-serif; font-size: 1.5rem; font-weight: 600; margin: 1.5em 0 .5em !important; }
+.prose-site h3 { font-family: var(--font-heading), Poppins, sans-serif; font-size: 1.2rem; font-weight: 600; margin: 1.3em 0 .4em !important; }
+.prose-site p { margin: 0 0 1.1em; }
+.prose-site ul { list-style: disc; padding-inline-start: 1.4em; margin: 0 0 1.1em; }
+.prose-site li { margin: .25em 0; }
+.prose-site a { color: rgb(var(--primary)); text-decoration: underline; }
+html[lang='ur'] body { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', 'Segoe UI', Tahoma, sans-serif; line-height: 1.9; }

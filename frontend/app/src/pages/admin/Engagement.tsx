@@ -11,6 +11,7 @@ import { fmtDate, fmtDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, Avatar, Badge, Card, CardHeader, EmptyState, PageHeader, Skeleton, StatTile } from '@/components/ui/display';
 import { Checkbox, Field, Input, Select, Switch, Textarea } from '@/components/ui/form';
+import { CustomFieldsForm, customErrors, useCustomFields, type CustomValues } from '@/components/customFields';
 import { Dialog, Tabs, useConfirm, useToast } from '@/components/ui/overlay';
 import { DataTable, Pagination } from '@/components/ui/table';
 import type { Author } from '@/components/community';
@@ -98,10 +99,12 @@ function EventFormInner({ e, batches, onClose, onSaved }: { e?: EventT & { banne
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: keyof typeof f, v: unknown) => setF((x) => ({ ...x, [k]: v }));
+  const defs = useCustomFields('event');
+  const [extra, setExtra] = useState<CustomValues>(e?.custom_fields ?? {});
   const save = useAction(() => api<{ data: EventT }>(e ? `/api/v1/admin/events/${e.id}` : '/api/v1/admin/events', { method: e ? 'PUT' : 'POST', body: {
     ...f, starts_at: fromLocal(f.starts_at), ends_at: fromLocal(f.ends_at), registration_deadline: fromLocal(f.registration_deadline),
     capacity: f.capacity ? Number(f.capacity) : null, max_guests: Number(f.max_guests), online_url: f.online_url || null, venue: f.venue || null,
-    address: f.address || null, batch_id: f.batch_id || null,
+    address: f.address || null, batch_id: f.batch_id || null, custom_fields: extra,
   } }), { success: e ? 'Event saved.' : 'Event created as a draft.', invalidate: [['admin-events'], ['admin-event'], ['events']], onSuccess: (r) => onSaved(r.data.id) });
   const err = save.fieldErrors;
   return (
@@ -129,6 +132,7 @@ function EventFormInner({ e, batches, onClose, onSaved }: { e?: EventT & { banne
             try { const mid = await uploadImage(file); set('banner_id', mid); setBanner(URL.createObjectURL(file)); } catch (err2) { toast.error(err2 instanceof Error ? err2.message : 'Upload failed.'); } finally { setUploading(false); } }} /></div>
         <Field label="Summary" hint="One line shown on event cards." className="sm:col-span-2">{(id, d) => <Input id={id} aria-describedby={d} value={f.summary} maxLength={300} onChange={(x) => set('summary', x.target.value)} />}</Field>
         <Field label="Description" className="sm:col-span-2">{(id) => <Textarea id={id} value={f.description} maxLength={20000} onChange={(x) => set('description', x.target.value)} className="min-h-[140px]" />}</Field>
+        {!!defs.data?.length && <div className="border-t border-line pt-4 sm:col-span-2"><CustomFieldsForm defs={defs.data} value={extra} onChange={setExtra} errors={customErrors(err)} /></div>}
       </div>
     </Dialog>
   );

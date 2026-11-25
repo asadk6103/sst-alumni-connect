@@ -55,15 +55,13 @@ def code_hash(user_id: uuid.UUID, code: str) -> str:
 # ── access tokens ────────────────────────────────────────────────────────────
 def create_access_token(user_id: uuid.UUID, session_id: uuid.UUID, minutes: int = ACCESS_TOKEN_MINUTES) -> str:
     now = datetime.now(UTC)
-    payload = {"sub": str(user_id), "sid": str(session_id), "iat": now, "exp": now + timedelta(minutes=minutes),
-               "typ": "access"}
+    payload = {"sub": str(user_id), "sid": str(session_id), "iat": now, "exp": now + timedelta(minutes=minutes), "typ": "access"}
     return jwt.encode(payload, secrets.get("jwt_signing_key"), algorithm="HS256")
 
 
 def decode_access_token(token: str) -> dict | None:
     try:
-        data = jwt.decode(token, secrets.get("jwt_signing_key"), algorithms=["HS256"],
-                          options={"require": ["exp", "sub", "sid"]})
+        data = jwt.decode(token, secrets.get("jwt_signing_key"), algorithms=["HS256"], options={"require": ["exp", "sub", "sid"]})
     except jwt.PyJWTError:
         return None
     return data if data.get("typ") == "access" else None

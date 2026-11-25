@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { homeFor, useAuth } from '@/lib/auth';
 import { useSite, type Site } from '@/lib/site';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/display';
 import { Field, Input, PasswordInput } from '@/components/ui/form';
@@ -42,6 +43,7 @@ export function PasswordChecklist({ password, min }: { password: string; min?: n
 }
 
 export function LoginPage() {
+  const t = useT();
   const { login, completeMfa, user } = useAuth();
   const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
@@ -108,8 +110,8 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Sign in to Alumni Portal" subtitle="Access your alumni account and stay connected with the SST community."
-      footer={<>New here? <Link to="/register" className="font-medium text-primary hover:underline">Create an alumni account</Link></>}>
+    <AuthLayout title={t('auth.sign_in_title', 'Sign in to Alumni Portal')} subtitle="Access your alumni account and stay connected with the SST community."
+      footer={<>{t('auth.no_account', 'New here?')} <Link to="/register" className="font-medium text-primary hover:underline">{t('auth.register', 'Create an alumni account')}</Link></>}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         {error && (
           <Alert tone="danger">
@@ -118,21 +120,21 @@ export function LoginPage() {
           </Alert>
         )}
         {info && <Alert tone="success">{info}</Alert>}
-        <Field label="Email address" required>
+        <Field label={t('auth.email', 'Email address')} required>
           {(id) => (
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-              <Input id={id} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9" placeholder="you@example.com" autoFocus />
+              <Mail className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <Input id={id} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" placeholder="you@example.com" autoFocus />
             </div>
           )}
         </Field>
-        <Field label="Password" required>
+        <Field label={t('auth.password', 'Password')} required>
           {(id) => <PasswordInput id={id} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
         </Field>
         <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">Forgot password?</Link>
+          <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">{t('auth.forgot', 'Forgot password?')}</Link>
         </div>
-        <Button type="submit" className="w-full" size="lg" loading={busy} disabled={!email || !password}><Lock />Sign in</Button>
+        <Button type="submit" className="w-full" size="lg" loading={busy} disabled={!email || !password}><Lock />{t('auth.sign_in', 'Sign in')}</Button>
       </form>
     </AuthLayout>
   );

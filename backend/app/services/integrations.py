@@ -59,8 +59,11 @@ class StorageConfig(BaseModel):
 PROVIDERS: dict[str, dict[str, tuple[type[BaseModel] | None, list[str]]]] = {
     "email": {"smtp": (SmtpConfig, ["password"])},
     "sms": {"http": (SmsConfig, ["api_key"])},
-    "storage": {"local": (None, []), "minio": (StorageConfig, ["access_key", "secret_key"]),
-                "s3": (StorageConfig, ["access_key", "secret_key"])},
+    "storage": {
+        "local": (None, []),
+        "minio": (StorageConfig, ["access_key", "secret_key"]),
+        "s3": (StorageConfig, ["access_key", "secret_key"]),
+    },
     "payment": {},  # adapters added when payment providers are introduced
 }
 
@@ -94,8 +97,7 @@ def public_view(row: IntegrationSetting | None, kind: str) -> dict:
         # never the values — only whether each secret is set
         "secrets": {f: ("••••••••" if stored.get(f) else "") for f in fields},
         "enabled": row.enabled,
-        "last_test": {"at": row.last_tested_at, "ok": row.last_test_ok, "message": row.last_test_message}
-        if row.last_tested_at else None,
+        "last_test": {"at": row.last_tested_at, "ok": row.last_test_ok, "message": row.last_test_message} if row.last_tested_at else None,
         "updated_at": row.updated_at,
     }
 
@@ -131,8 +133,7 @@ async def save(db: AsyncSession, kind: str, upd: IntegrationUpdate, actor) -> In
         if provider_changed or upd.secrets:
             row.last_tested_at = row.last_test_ok = row.last_test_message = None
     else:
-        row = IntegrationSetting(kind=kind, provider=upd.provider, config=config, secrets_enc=enc,
-                                 enabled=upd.enabled, updated_by=actor)
+        row = IntegrationSetting(kind=kind, provider=upd.provider, config=config, secrets_enc=enc, enabled=upd.enabled, updated_by=actor)
         db.add(row)
     await db.flush()
     await db.refresh(row)

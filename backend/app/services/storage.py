@@ -81,15 +81,21 @@ class S3Storage:
             raise StorageError("A bucket name is required.")
         endpoint = cfg.get("endpoint") or (f"s3.{cfg['region']}.amazonaws.com" if cfg.get("region") else "s3.amazonaws.com")
         self.bucket, self.cfg = cfg["bucket"], cfg
-        self.client = Minio(endpoint, access_key=secrets.get("access_key"), secret_key=secrets.get("secret_key"),
-                            secure=bool(cfg.get("secure", True)), region=cfg.get("region") or None)
+        self.client = Minio(
+            endpoint,
+            access_key=secrets.get("access_key"),
+            secret_key=secrets.get("secret_key"),
+            secure=bool(cfg.get("secure", True)),
+            region=cfg.get("region") or None,
+        )
 
     def _key(self, key: str, private: bool) -> str:
         return f"private/{key}" if private else f"public/{key}"
 
     async def put(self, key: str, data: bytes, content_type: str, private: bool = False) -> Stored:
-        await asyncio.to_thread(self.client.put_object, self.bucket, self._key(key, private), io.BytesIO(data),
-                                len(data), content_type=content_type)
+        await asyncio.to_thread(
+            self.client.put_object, self.bucket, self._key(key, private), io.BytesIO(data), len(data), content_type=content_type
+        )
         return Stored("s3", key)
 
     async def get(self, key: str, private: bool = False) -> bytes:
@@ -125,9 +131,17 @@ class S3Storage:
                 self.client.remove_object(self.bucket, k)
                 if self.cfg.get("access", "public") == "public":
                     # Anyone may read objects under public/ (never private/).
-                    policy = {"Version": "2012-10-17", "Statement": [{
-                        "Effect": "Allow", "Principal": {"AWS": ["*"]}, "Action": ["s3:GetObject"],
-                        "Resource": [f"arn:aws:s3:::{self.bucket}/public/*"]}]}
+                    policy = {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {"AWS": ["*"]},
+                                "Action": ["s3:GetObject"],
+                                "Resource": [f"arn:aws:s3:::{self.bucket}/public/*"],
+                            }
+                        ],
+                    }
                     try:
                         self.client.set_bucket_policy(self.bucket, json.dumps(policy))
                     except S3Error:

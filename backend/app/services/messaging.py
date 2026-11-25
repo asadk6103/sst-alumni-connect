@@ -74,8 +74,13 @@ def smtp_check(cfg: dict, secrets: dict, timeout: float = 10) -> str:
 
 
 def sms_send(cfg: dict, secrets: dict, to: str, message: str, timeout: float = 15) -> str:
-    values = {"to": to, "message": message, "sender_id": cfg.get("sender_id") or "",
-              "account_id": cfg.get("account_id") or "", "api_key": secrets.get("api_key", "")}
+    values = {
+        "to": to,
+        "message": message,
+        "sender_id": cfg.get("sender_id") or "",
+        "account_id": cfg.get("account_id") or "",
+        "api_key": secrets.get("api_key", ""),
+    }
     # JSON-escape values placed into the JSON body template
     if cfg.get("content_type", "json") == "json":
         body_text = render(cfg["body_template"], {k: json.dumps(v)[1:-1] for k, v in values.items()})
@@ -112,10 +117,17 @@ def sms_send(cfg: dict, secrets: dict, to: str, message: str, timeout: float = 1
 
 # ── templates + queueing ─────────────────────────────────────────────────────
 async def _template(db: AsyncSession, key: str, channel: str, language: str = "en") -> MessageTemplate | None:
-    rows = (await db.execute(
-        select(MessageTemplate).where(MessageTemplate.key == key, MessageTemplate.channel == channel,
-                                      MessageTemplate.enabled.is_(True))
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(MessageTemplate).where(
+                    MessageTemplate.key == key, MessageTemplate.channel == channel, MessageTemplate.enabled.is_(True)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     return next((r for r in rows if r.language == language), None) or next((r for r in rows if r.language == "en"), None)
 
 
@@ -135,8 +147,9 @@ async def queue_email(db: AsyncSession, to: str, key: str, data: dict, language:
     if not rendered:
         return None
     subject, body = rendered
-    entry = NotificationLog(channel="email", recipient=to, template=key, subject=subject, status="queued",
-                            payload={"to": to, "subject": subject, "html": body})
+    entry = NotificationLog(
+        channel="email", recipient=to, template=key, subject=subject, status="queued", payload={"to": to, "subject": subject, "html": body}
+    )
     db.add(entry)
     await db.flush()
     payload = {"log_id": entry.id, **entry.payload}
@@ -192,8 +205,14 @@ async def queue_html_email(db: AsyncSession, to: str, subject: str, content_html
     general = await settings_store.get_group(db, "general")
     brand = await settings_store.branding(db)
     body = wrap_email(content_html + footer_html, general.app_name, brand.colors.primary)
-    entry = NotificationLog(channel="email", recipient=to, template=label, subject=subject[:250], status="queued",
-                            payload={"to": to, "subject": subject, "html": body})
+    entry = NotificationLog(
+        channel="email",
+        recipient=to,
+        template=label,
+        subject=subject[:250],
+        status="queued",
+        payload={"to": to, "subject": subject, "html": body},
+    )
     db.add(entry)
     await db.flush()
     from ..worker import dispatch

@@ -10,6 +10,7 @@ import { cn, fmtDate, fmtDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, Avatar, Badge, Card, CardHeader, EmptyState, PageHeader, Skeleton } from '@/components/ui/display';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
+import { CustomFieldsForm, ExtraFields, customErrors, useCustomFields, type CustomValues, type ExtraField } from '@/components/customFields';
 import { Dialog, Tabs, useConfirm } from '@/components/ui/overlay';
 import { Pagination } from '@/components/ui/table';
 import type { Author } from '@/components/community';
@@ -17,7 +18,7 @@ import type { Author } from '@/components/community';
 export type MentorT = {
   user: Author; status: string; industry: string | null; expertise: string[]; skills: string[]; experience_years: number | null; hours_per_month: number;
   formats: string[]; mentees_students: boolean; mentees_alumni: boolean; max_mentees: number; introduction: string; rating: number | null; reviews: number;
-  active_mentees: number; available: boolean; rejection_reason?: string | null;
+  active_mentees: number; available: boolean; rejection_reason?: string | null; custom_fields?: Record<string, unknown>; extra_fields?: ExtraField[];
   testimonials?: { rating: number; comment: string; from: Author | null; created_at: string }[]; my_request?: { id: string; status: string } | null;
 };
 type Req = {
@@ -129,6 +130,7 @@ export function MentorDialog({ id, canRequest, onClose }: { id: string; canReque
             <div><p className="text-sm text-ink">{[m.user.headline, m.industry].filter(Boolean).join(' · ')}</p><p className="text-xs text-ink-muted">{m.user.batch}{m.experience_years ? ` · ${m.experience_years} years' experience` : ''}</p>
               <p className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Stars value={m.rating} />{m.reviews} review{m.reviews === 1 ? '' : 's'}</p></div></div>
           <p className="whitespace-pre-line text-sm text-ink">{m.introduction}</p>
+          <ExtraFields items={m.extra_fields} />
           <div><p className="mb-1 text-xs font-medium uppercase text-ink-muted">Areas of expertise</p><div className="flex flex-wrap gap-1">{m.expertise.map((x) => <Badge key={x} tone="primary">{x}</Badge>)}</div></div>
           <p className="text-sm text-ink-muted">{m.formats.map((x) => FORMAT[x]).join(' · ')} · about {m.hours_per_month} h/month · mentors {[m.mentees_students && 'students', m.mentees_alumni && 'alumni'].filter(Boolean).join(' and ')}</p>
           {!!m.testimonials?.length && <div className="space-y-2">{m.testimonials.map((t, i) => (
@@ -168,8 +170,10 @@ function BecomeMentor({ mentor }: { mentor: MentorT | null }) {
     hours_per_month: String(mentor?.hours_per_month ?? 2), formats: mentor?.formats ?? ['video'], mentees_students: mentor?.mentees_students ?? true,
     mentees_alumni: mentor?.mentees_alumni ?? true, max_mentees: String(mentor?.max_mentees ?? 3), introduction: mentor?.introduction ?? '',
   });
+  const defs = useCustomFields('mentor');
+  const [extra, setExtra] = useState<CustomValues>(mentor?.custom_fields ?? {});
   const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
-  const save = useAction(() => api('/api/v1/mentorship/me', { method: 'PUT', body: { ...f, expertise: list(f.expertise), skills: list(f.skills),
+  const save = useAction(() => api('/api/v1/mentorship/me', { method: 'PUT', body: { ...f, custom_fields: extra, expertise: list(f.expertise), skills: list(f.skills),
     experience_years: f.experience_years ? Number(f.experience_years) : null, hours_per_month: Number(f.hours_per_month), max_mentees: Number(f.max_mentees) } }),
   { success: mentor ? 'Mentor profile saved.' : 'Application sent — the mentorship coordinator will review it.', invalidate: [['mentorship-me']] });
   const pause = useAction((paused: boolean) => api('/api/v1/mentorship/me/availability', { method: 'POST', body: { paused } }), { success: 'Saved.', invalidate: [['mentorship-me']] });
@@ -197,6 +201,7 @@ function BecomeMentor({ mentor }: { mentor: MentorT | null }) {
             <Checkbox checked={f.mentees_alumni} onCheckedChange={(v) => setF({ ...f, mentees_alumni: v })} label="Alumni" /></div></fieldset>
         <Field label="Short introduction" required hint="At least 30 characters — who you are and how you can help." error={e.introduction} className="sm:col-span-2">
           {(id, d) => <Textarea id={id} aria-describedby={d} value={f.introduction} maxLength={3000} onChange={(x) => setF({ ...f, introduction: x.target.value })} className="min-h-[120px]" />}</Field>
+        {!!defs.data?.length && <div className="border-t border-line pt-4 sm:col-span-2"><CustomFieldsForm defs={defs.data} value={extra} onChange={setExtra} errors={customErrors(e)} /></div>}
       </div>
       <div className="flex justify-end border-t border-line px-5 py-3"><Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{mentor ? 'Save' : 'Apply to become a mentor'}</Button></div>
     </Card>

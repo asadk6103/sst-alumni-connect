@@ -17,7 +17,7 @@ from ...core.errors import AppError, conflict, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import CareerResource, Employer, JobApplication, JobCategory, JobPost, Media, Resume, SavedJob, User
-from ...services import media, notifications
+from ...services import custom_fields, media, notifications
 from ..community.service import authors
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Jobs"], dependencies=[Depends(require_module("jobs"))])
@@ -97,6 +97,9 @@ async def job_out(
         "closed": j.status == "closed" or bool(j.deadline and j.deadline < today()),
     }
     if detail:
+        owner = mine or p.can("jobs.view")
+        out["custom_fields"] = (j.custom_fields or {}) if owner else None
+        out["extra_fields"] = await custom_fields.visible_for(db, "job_post", j.custom_fields, "owner" if owner else "member")
         out.update(
             {
                 "description": j.description,
@@ -244,6 +247,7 @@ class JobIn(BaseModel):
     apply_email: EmailStr | None = None
     apply_in_portal: bool = True
     is_referral: bool = False
+    custom_fields: dict = Field(default_factory=dict)
 
     @field_validator("skills")
     @classmethod
@@ -290,7 +294,8 @@ async def create_job(
     await _check_job_refs(db, body, me)
     auto = me.can("jobs.approve")
     j = JobPost(
-        **body.model_dump(),
+        **body.model_dump(exclude={"custom_fields"}),
+        custom_fields=await custom_fields.clean(db, "job_post", body.custom_fields, actor=me.id),
         posted_by=me.id,
         status="approved" if auto else "pending",
         approved_by=me.id if auto else None,
@@ -321,8 +326,9 @@ async def edit_job(
     if not j or (j.posted_by != me.id and not me.can("jobs.edit")):
         raise not_found("Job")
     await _check_job_refs(db, body, me)
-    for k, v in body.model_dump().items():
+    for k, v in body.model_dump(exclude={"custom_fields"}).items():
         setattr(j, k, v)
+    j.custom_fields = await custom_fields.clean(db, "job_post", body.custom_fields, j.custom_fields, actor=me.id)
     if not me.can("jobs.approve") and j.status in ("approved", "rejected"):
         j.status, j.approved_at, j.rejection_reason = "pending", None, None
     await db.flush()

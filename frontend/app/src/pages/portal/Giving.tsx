@@ -9,6 +9,7 @@ import { cn, fmtDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, Badge, Card, CardHeader, EmptyState, PageHeader, Progress, Skeleton } from '@/components/ui/display';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
+import { CustomFieldsForm, customErrors, useCustomFields, type CustomValues } from '@/components/customFields';
 import { Dialog, Tabs, useConfirm, useToast } from '@/components/ui/overlay';
 import { Pagination } from '@/components/ui/table';
 import { pick, type Img } from './Events';
@@ -122,9 +123,11 @@ function DonateDialog({ campaign, onClose }: { campaign?: CampaignT; onClose: ()
   const camps = useQuery({ queryKey: ['campaigns'], queryFn: () => get<CampaignT[]>('/api/v1/donations/campaigns'), enabled: !campaign });
   const [f, setF] = useState({ campaign_id: campaign?.id ?? '', category: 'general', amount: '', method: 'bank_transfer', anonymous: false, recognition_consent: true, message: '' });
   const [done, setDone] = useState<(DonationT & { payment_info: PayInfo }) | null>(null);
+  const defs = useCustomFields('donation');
+  const [extra, setExtra] = useState<CustomValues>({});
   const currency = campaign?.currency ?? camps.data?.find((c) => c.id === f.campaign_id)?.currency ?? 'PKR';
   const pledge = useAction(() => api<{ data: DonationT & { payment_info: PayInfo } }>('/api/v1/donations/pledges', { method: 'POST', body: {
-    ...f, campaign_id: f.campaign_id || null, amount: f.amount, message: f.message || null } }),
+    ...f, campaign_id: f.campaign_id || null, amount: f.amount, message: f.message || null, custom_fields: extra } }),
   { invalidate: [['my-donations'], ['campaign']], onSuccess: (r) => setDone(r.data) });
   const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast.success('Copied.')).catch(() => undefined);
   if (!can('portal.donate')) return <Dialog open onOpenChange={(v) => !v && onClose()} title="Make a donation"><Alert tone="info">Donations through the portal are open to members.</Alert></Dialog>;
@@ -165,6 +168,7 @@ function DonateDialog({ campaign, onClose }: { campaign?: CampaignT; onClose: ()
           <Input id={id} aria-describedby={d} type="number" min={1} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="Other amount" /></>)}</Field>
         <Field label="How will you pay?">{(id) => <Select id={id} value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}><option value="bank_transfer">Bank transfer</option><option value="cash">Cash at the alumni office</option><option value="cheque">Cheque</option></Select>}</Field>
         <Field label="Message (optional)">{(id) => <Textarea id={id} value={f.message} maxLength={500} onChange={(e) => setF({ ...f, message: e.target.value })} className="min-h-[60px]" />}</Field>
+        {!!defs.data?.length && <CustomFieldsForm defs={defs.data} value={extra} onChange={setExtra} errors={customErrors(pledge.fieldErrors)} />}
         <div className="space-y-2">
           <Checkbox checked={f.anonymous} onCheckedChange={(v) => setF({ ...f, anonymous: v })} label="Give anonymously (your name is not shown to other members)" />
           <Checkbox checked={f.recognition_consent} onCheckedChange={(v) => setF({ ...f, recognition_consent: v })} label="Thank me on the campaign's donor wall" />

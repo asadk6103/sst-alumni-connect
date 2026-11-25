@@ -18,7 +18,7 @@ from ...core.errors import AppError, conflict, forbidden, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import AlumniProfile, Mentor, MentorshipFeedback, MentorshipRequest, MentorshipSession, User
-from ...services import live, notifications
+from ...services import custom_fields, live, notifications
 from ..community.service import authors
 
 router = APIRouter(prefix="/api/v1/mentorship", tags=["Mentorship"], dependencies=[Depends(require_module("mentorship"))])
@@ -80,7 +80,15 @@ async def mentor_out(db: AsyncSession, m: Mentor, people: dict | None = None, ra
         "active_mentees": await _active_mentees(db, m.user_id),
     }
     if full:
-        out.update({"rejection_reason": m.rejection_reason, "approved_at": m.approved_at, "created_at": m.created_at})
+        out.update(
+            {
+                "rejection_reason": m.rejection_reason,
+                "approved_at": m.approved_at,
+                "created_at": m.created_at,
+                "custom_fields": m.custom_fields or {},
+            }
+        )
+    out["extra_fields"] = await custom_fields.visible_for(db, "mentor", m.custom_fields, "owner" if full else "member")
     out["available"] = m.status == "approved" and out["active_mentees"] < m.max_mentees
     return out
 
@@ -97,6 +105,7 @@ class MentorIn(BaseModel):
     mentees_alumni: bool = True
     max_mentees: int = Field(3, ge=1, le=30)
     introduction: str = Field(..., min_length=30, max_length=3000)
+    custom_fields: dict = Field(default_factory=dict)
 
     @field_validator("expertise", "skills")
     @classmethod
@@ -139,8 +148,9 @@ async def apply_mentor(
     if new:
         m = Mentor(user_id=me.id, status="pending")
         db.add(m)
-    for k, v in body.model_dump().items():
+    for k, v in body.model_dump(exclude={"custom_fields"}).items():
         setattr(m, k, v)
+    m.custom_fields = await custom_fields.clean(db, "mentor", body.custom_fields, m.custom_fields, actor=me.id)
     if m.status == "rejected":
         m.status, m.rejection_reason = "pending", None
     await db.flush()

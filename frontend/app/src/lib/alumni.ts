@@ -16,6 +16,7 @@ export type Achievement = { id: string; kind: string; title: string; issuer: str
   description: string | null };
 
 export type ProfileDetail = PersonCard & {
+  extra_fields?: import('@/components/customFields').ExtraField[];
   bio: string | null; admission_year: number | null; class_name: string | null; email: string | null; phone: string | null;
   date_of_birth: string | null; website: string | null; linkedin: string | null; verified_at: string | null; followers: number;
   connections: number; member_since: string; is_self: boolean; skills: string[]; employment: Employment[]; education: Education[];
@@ -26,6 +27,7 @@ export type Level = 'members' | 'connections' | 'only_me';
 export type Doc = { id: string; filename: string; size: number; mime: string; created_at: string };
 
 export type MyProfile = ProfileDetail & {
+  custom_fields: Record<string, unknown>;
   gender: string | null; batch_id: string | null; registration_no: string | null; phone_verified: boolean;
   privacy: { visibility: 'members' | 'connections' | 'hidden'; sections: Record<string, Level> };
   privacy_sections: Record<string, string>;

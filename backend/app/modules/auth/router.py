@@ -88,26 +88,44 @@ async def user_payload(db: AsyncSession, user: User) -> dict:
     from ...models import Permission, role_permissions
 
     role_ids = [r.id for r in user.roles]
-    perms = sorted((await db.execute(
-        select(Permission.key).join(role_permissions, role_permissions.c.permission_id == Permission.id)
-        .where(role_permissions.c.role_id.in_(role_ids)).distinct()
-    )).scalars().all()) if role_ids else []
+    perms = (
+        sorted(
+            (
+                await db.execute(
+                    select(Permission.key)
+                    .join(role_permissions, role_permissions.c.permission_id == Permission.id)
+                    .where(role_permissions.c.role_id.in_(role_ids))
+                    .distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if role_ids
+        else []
+    )
     is_staff = any(r.is_staff for r in user.roles)
     mfa_required = sec.mfa_policy == "required_all" or (sec.mfa_policy == "required_staff" and is_staff)
     return {
-        "id": str(user.id), "email": user.email, "full_name": user.full_name, "phone": user.phone,
-        "status": user.status, "language": user.language,
-        "email_verified": bool(user.email_verified_at), "phone_verified": bool(user.phone_verified_at),
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "phone": user.phone,
+        "status": user.status,
+        "language": user.language,
+        "email_verified": bool(user.email_verified_at),
+        "phone_verified": bool(user.phone_verified_at),
         "roles": [{"key": r.key, "name": r.name} for r in user.roles],
-        "permissions": perms, "is_staff": is_staff,
-        "mfa_enabled": user.totp_enabled, "mfa_setup_required": mfa_required and not user.totp_enabled,
+        "permissions": perms,
+        "is_staff": is_staff,
+        "mfa_enabled": user.totp_enabled,
+        "mfa_setup_required": mfa_required and not user.totp_enabled,
         "password_expired": svc.password_expired(user, sec),
     }
 
 
 async def _find_user(db: AsyncSession, email: str) -> User | None:
-    return (await db.execute(select(User).where(func.lower(User.email) == email.lower(), User.deleted_at.is_(None))
-                             )).scalar_one_or_none()
+    return (await db.execute(select(User).where(func.lower(User.email) == email.lower(), User.deleted_at.is_(None)))).scalar_one_or_none()
 
 
 async def _login_alert(db: AsyncSession, request: Request, user: User) -> None:
@@ -115,12 +133,22 @@ async def _login_alert(db: AsyncSession, request: Request, user: User) -> None:
     if not sec.login_notifications:
         return
     ua = (request.headers.get("user-agent") or "")[:300]
-    known = (await db.execute(select(func.count()).select_from(Session).where(
-        Session.user_id == user.id, Session.user_agent == ua))).scalar_one()
+    known = (
+        await db.execute(select(func.count()).select_from(Session).where(Session.user_id == user.id, Session.user_agent == ua))
+    ).scalar_one()
     if known == 0 and user.last_login_at is not None:
-        await messaging.queue_email(db, user.email, "auth.login_alert", {
-            "name": user.full_name, "device": ua or "Unknown device", "ip": client_ip(request) or "unknown",
-            "time": svc.now().strftime("%d %b %Y %H:%M UTC")}, user.language or "en")
+        await messaging.queue_email(
+            db,
+            user.email,
+            "auth.login_alert",
+            {
+                "name": user.full_name,
+                "device": ua or "Unknown device",
+                "ip": client_ip(request) or "unknown",
+                "time": svc.now().strftime("%d %b %Y %H:%M UTC"),
+            },
+            user.language or "en",
+        )
 
 
 @router.post("/login", summary="Sign in with email and password")
@@ -165,9 +193,13 @@ async def login_mfa(body: MfaLoginIn, request: Request, response: Response, db: 
     await enforce(f"mfa:{client_ip(request)}", 20, 300)
     from ...models import UserVerification
 
-    v = (await db.execute(select(UserVerification).where(
-        UserVerification.kind == "mfa_challenge", UserVerification.secret_hash == token_hash(body.challenge)
-    ))).scalar_one_or_none()
+    v = (
+        await db.execute(
+            select(UserVerification).where(
+                UserVerification.kind == "mfa_challenge", UserVerification.secret_hash == token_hash(body.challenge)
+            )
+        )
+    ).scalar_one_or_none()
     if not v or v.consumed_at or v.expires_at <= svc.now() or v.attempts >= 5:
         raise AppError(400, "INVALID_CHALLENGE", "Your sign-in attempt expired. Please sign in again.")
     user = await db.get(User, v.user_id)
@@ -212,12 +244,18 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
 
 
 @router.post("/logout-all", summary="Sign out of every device")
-async def logout_all(request: Request, response: Response, p: Principal = Depends(current_user),
-                     db: AsyncSession = Depends(get_db)):
+async def logout_all(request: Request, response: Response, p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
     n = await svc.revoke_all(db, p.id)
     svc.clear_refresh_cookie(request, response)
-    await record(db, actor_id=p.id, action="logout_all", entity="user", entity_id=p.id,
-                 summary=f"Signed out of {n} session(s)", ip=client_ip(request))
+    await record(
+        db,
+        actor_id=p.id,
+        action="logout_all",
+        entity="user",
+        entity_id=p.id,
+        summary=f"Signed out of {n} session(s)",
+        ip=client_ip(request),
+    )
     return {"data": {"sessions_ended": n}}
 
 
@@ -229,12 +267,30 @@ async def me(p: Principal = Depends(current_user), db: AsyncSession = Depends(ge
 
 @router.get("/sessions", summary="Active sessions of the current user")
 async def sessions(p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    rows = (await db.execute(select(Session).where(Session.user_id == p.id, Session.revoked_at.is_(None),
-                                                   Session.expires_at > svc.now())
-                             .order_by(Session.last_used_at.desc()))).scalars().all()
-    return {"data": [{"id": str(s.id), "user_agent": s.user_agent, "ip": str(s.ip) if s.ip else None,
-                      "created_at": s.created_at, "last_used_at": s.last_used_at, "current": s.id == p.session_id}
-                     for s in rows]}
+    rows = (
+        (
+            await db.execute(
+                select(Session)
+                .where(Session.user_id == p.id, Session.revoked_at.is_(None), Session.expires_at > svc.now())
+                .order_by(Session.last_used_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "data": [
+            {
+                "id": str(s.id),
+                "user_agent": s.user_agent,
+                "ip": str(s.ip) if s.ip else None,
+                "created_at": s.created_at,
+                "last_used_at": s.last_used_at,
+                "current": s.id == p.session_id,
+            }
+            for s in rows
+        ]
+    }
 
 
 @router.delete("/sessions/{session_id}", summary="End one session")
@@ -257,9 +313,13 @@ async def forgot(body: EmailIn, request: Request, db: AsyncSession = Depends(get
         token = random_token(32)
         await svc.create_verification(db, user, "password_reset", token_hash(token), timedelta(minutes=60))
         general = await _general(db)
-        await messaging.queue_email(db, user.email, "auth.password_reset", {
-            "name": user.full_name, "link": f"{general.app_url}/reset-password?token={token}", "minutes": 60},
-            user.language or "en")
+        await messaging.queue_email(
+            db,
+            user.email,
+            "auth.password_reset",
+            {"name": user.full_name, "link": f"{general.app_url}/reset-password?token={token}", "minutes": 60},
+            user.language or "en",
+        )
     # Same answer whether or not the account exists.
     return {"data": {"message": "If an account exists for that email, a reset link is on its way."}}
 
@@ -281,28 +341,42 @@ async def reset(body: ResetIn, request: Request, db: AsyncSession = Depends(get_
     await svc.revoke_all(db, user.id)
     await _alumni_contact_proven(db, user)
     await messaging.queue_email(db, user.email, "auth.password_changed", {"name": user.full_name}, user.language or "en")
-    await record(db, actor_id=user.id, action="password_reset", entity="user", entity_id=user.id,
-                 summary="Password reset via email link", ip=client_ip(request))
+    await record(
+        db,
+        actor_id=user.id,
+        action="password_reset",
+        entity="user",
+        entity_id=user.id,
+        summary="Password reset via email link",
+        ip=client_ip(request),
+    )
     return {"data": {"ok": True}}
 
 
 @router.post("/password/change", summary="Change password (signs out other devices)")
-async def change_password(body: ChangePasswordIn, request: Request, p: Principal = Depends(current_user),
-                          db: AsyncSession = Depends(get_db)):
+async def change_password(
+    body: ChangePasswordIn, request: Request, p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)
+):
     user = await db.get(User, p.id)
     if not verify_password(user.password_hash, body.current_password):
-        raise AppError(400, "INVALID_PASSWORD", "Your current password is not correct.",
-                       [{"field": "current_password", "message": "Not correct."}])
+        raise AppError(
+            400, "INVALID_PASSWORD", "Your current password is not correct.", [{"field": "current_password", "message": "Not correct."}]
+        )
     if verify_password(user.password_hash, body.new_password):
-        raise AppError(422, "SAME_PASSWORD", "Choose a password different from your current one.",
-                       [{"field": "new_password", "message": "Must differ from the current password."}])
+        raise AppError(
+            422,
+            "SAME_PASSWORD",
+            "Choose a password different from your current one.",
+            [{"field": "new_password", "message": "Must differ from the current password."}],
+        )
     svc.check_password_policy(body.new_password, await _sec(db))
     user.password_hash = hash_password(body.new_password)
     user.password_changed_at = svc.now()
     await svc.revoke_all(db, user.id, except_session=p.session_id)
     await messaging.queue_email(db, user.email, "auth.password_changed", {"name": user.full_name}, user.language or "en")
-    await record(db, actor_id=p.id, action="password_change", entity="user", entity_id=p.id,
-                 summary="Password changed", ip=client_ip(request))
+    await record(
+        db, actor_id=p.id, action="password_change", entity="user", entity_id=p.id, summary="Password changed", ip=client_ip(request)
+    )
     return {"data": {"ok": True}}
 
 
@@ -311,9 +385,13 @@ async def send_email_verification(db: AsyncSession, user: User) -> None:
     token = random_token(32)
     await svc.create_verification(db, user, "email", token_hash(token), timedelta(hours=48))
     general = await _general(db)
-    await messaging.queue_email(db, user.email, "auth.verify_email", {
-        "name": user.full_name, "link": f"{general.app_url}/verify-email?token={token}", "hours": 48},
-        user.language or "en")
+    await messaging.queue_email(
+        db,
+        user.email,
+        "auth.verify_email",
+        {"name": user.full_name, "link": f"{general.app_url}/verify-email?token={token}", "hours": 48},
+        user.language or "en",
+    )
 
 
 @router.post("/email/verify", summary="Confirm an email address")
@@ -353,8 +431,7 @@ async def phone_send(body: PhoneIn, p: Principal = Depends(current_user), db: As
     if not user.phone:
         raise AppError(422, "PHONE_REQUIRED", "Add a mobile number first.", [{"field": "phone", "message": "Required."}])
     code = random_code(6)
-    await svc.create_verification(db, user, "phone", code_hash(user.id, code), timedelta(minutes=10),
-                                  {"phone": user.phone})
+    await svc.create_verification(db, user, "phone", code_hash(user.id, code), timedelta(minutes=10), {"phone": user.phone})
     await messaging.queue_sms(db, user.phone, "auth.phone_otp", {"code": code, "minutes": 10}, user.language or "en")
     return {"data": {"sent_to": "•" * max(0, len(user.phone) - 4) + user.phone[-4:]}}
 
@@ -363,9 +440,17 @@ async def phone_send(body: PhoneIn, p: Principal = Depends(current_user), db: As
 async def phone_verify(body: CodeIn, p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
     from ...models import UserVerification
 
-    v = (await db.execute(select(UserVerification).where(
-        UserVerification.user_id == p.id, UserVerification.kind == "phone", UserVerification.consumed_at.is_(None)
-    ).order_by(UserVerification.created_at.desc()))).scalars().first()
+    v = (
+        (
+            await db.execute(
+                select(UserVerification)
+                .where(UserVerification.user_id == p.id, UserVerification.kind == "phone", UserVerification.consumed_at.is_(None))
+                .order_by(UserVerification.created_at.desc())
+            )
+        )
+        .scalars()
+        .first()
+    )
     if not v or v.expires_at <= svc.now() or v.attempts >= 5:
         raise AppError(400, "INVALID_CODE", "The code has expired. Please request a new one.")
     if v.secret_hash != code_hash(p.id, body.code.strip()):
@@ -393,8 +478,7 @@ async def mfa_setup(p: Principal = Depends(current_user), db: AsyncSession = Dep
 
 
 @router.post("/mfa/enable", summary="Confirm two-factor setup with a code; returns recovery codes")
-async def mfa_enable(body: CodeIn, request: Request, p: Principal = Depends(current_user),
-                     db: AsyncSession = Depends(get_db)):
+async def mfa_enable(body: CodeIn, request: Request, p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
     user = await db.get(User, p.id)
     secret = decrypt(user.totp_secret_enc)
     if not secret or not verify_totp(secret, body.code):
@@ -403,14 +487,20 @@ async def mfa_enable(body: CodeIn, request: Request, p: Principal = Depends(curr
     user.recovery_codes = [token_hash(c) for c in codes]
     user.totp_enabled = True
     forget_principals(p.id)
-    await record(db, actor_id=p.id, action="mfa_enable", entity="user", entity_id=p.id,
-                 summary="Two-factor authentication enabled", ip=client_ip(request))
+    await record(
+        db,
+        actor_id=p.id,
+        action="mfa_enable",
+        entity="user",
+        entity_id=p.id,
+        summary="Two-factor authentication enabled",
+        ip=client_ip(request),
+    )
     return {"data": {"recovery_codes": codes}}
 
 
 @router.post("/mfa/disable", summary="Turn off two-factor authentication")
-async def mfa_disable(body: PasswordCodeIn, request: Request, p: Principal = Depends(current_user),
-                      db: AsyncSession = Depends(get_db)):
+async def mfa_disable(body: PasswordCodeIn, request: Request, p: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
     user = await db.get(User, p.id)
     sec = await _sec(db)
     is_staff = any(r.is_staff for r in user.roles)
@@ -421,8 +511,15 @@ async def mfa_disable(body: PasswordCodeIn, request: Request, p: Principal = Dep
         raise AppError(400, "INVALID_CODE", "Password or code is not correct.")
     user.totp_enabled, user.totp_secret_enc, user.recovery_codes = False, None, None
     forget_principals(p.id)
-    await record(db, actor_id=p.id, action="mfa_disable", entity="user", entity_id=p.id,
-                 summary="Two-factor authentication disabled", ip=client_ip(request))
+    await record(
+        db,
+        actor_id=p.id,
+        action="mfa_disable",
+        entity="user",
+        entity_id=p.id,
+        summary="Two-factor authentication disabled",
+        ip=client_ip(request),
+    )
     return {"data": {"ok": True}}
 
 

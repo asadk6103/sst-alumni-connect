@@ -6,8 +6,9 @@ from .conftest import auth, last_email_link
 
 
 async def _make_user(client, token, email, roles, password="An0therPassword!"):
-    r = await client.post("/api/v1/admin/users", headers=auth(token),
-                          json={"full_name": "Test User", "email": email, "roles": roles, "password": password})
+    r = await client.post(
+        "/api/v1/admin/users", headers=auth(token), json={"full_name": "Test User", "email": email, "roles": roles, "password": password}
+    )
     assert r.status_code == 201, r.text
     return r.json()["data"]
 
@@ -54,8 +55,11 @@ async def test_refresh_rotation_and_reuse_detection(client, installed):
     from app.models import Session
 
     async with SessionLocal() as db:
-        await db.execute(update(Session).where(Session.rotated_at.is_not(None), Session.prev_refresh_hash.is_not(None))
-                         .values(rotated_at=Session.rotated_at - timedelta(minutes=5)))
+        await db.execute(
+            update(Session)
+            .where(Session.rotated_at.is_not(None), Session.prev_refresh_hash.is_not(None))
+            .values(rotated_at=Session.rotated_at - timedelta(minutes=5))
+        )
         await db.commit()
     r3 = await client.post("/api/v1/auth/refresh", cookies={"sst_rt": first})
     assert r3.status_code == 401
@@ -88,8 +92,7 @@ async def test_two_factor(client, installed):
     setup = (await client.post("/api/v1/auth/mfa/setup", headers=auth(token))).json()["data"]
     r = await client.post("/api/v1/auth/mfa/enable", headers=auth(token), json={"code": "000000"})
     assert r.status_code == 400
-    r = await client.post("/api/v1/auth/mfa/enable", headers=auth(token),
-                          json={"code": pyotp.TOTP(setup["secret"]).now()})
+    r = await client.post("/api/v1/auth/mfa/enable", headers=auth(token), json={"code": pyotp.TOTP(setup["secret"]).now()})
     recovery = r.json()["data"]["recovery_codes"]
     assert len(recovery) == 8
     r = await _login(client, "mfa@example.org", "An0therPassword!")
@@ -97,8 +100,7 @@ async def test_two_factor(client, installed):
     assert data["mfa_required"] is True and "access_token" not in data
     r = await client.post("/api/v1/auth/login/mfa", json={"challenge": data["challenge"], "code": "123456"})
     assert r.status_code == 401
-    r = await client.post("/api/v1/auth/login/mfa", json={"challenge": data["challenge"],
-                                                          "code": pyotp.TOTP(setup["secret"]).now()})
+    r = await client.post("/api/v1/auth/login/mfa", json={"challenge": data["challenge"], "code": pyotp.TOTP(setup["secret"]).now()})
     assert r.status_code == 200 and r.json()["data"]["user"]["mfa_enabled"] is True
     # recovery code works once
     data = (await _login(client, "mfa@example.org", "An0therPassword!")).json()["data"]
@@ -115,11 +117,13 @@ async def test_change_password_and_sessions(client, installed):
     b = (await _login(client, "change@example.org", "An0therPassword!")).json()["data"]["access_token"]
     sessions = (await client.get("/api/v1/auth/sessions", headers=auth(a))).json()["data"]
     assert len(sessions) == 2 and sum(s["current"] for s in sessions) == 1
-    r = await client.post("/api/v1/auth/password/change", headers=auth(a),
-                          json={"current_password": "wrong", "new_password": "Something123New"})
+    r = await client.post(
+        "/api/v1/auth/password/change", headers=auth(a), json={"current_password": "wrong", "new_password": "Something123New"}
+    )
     assert r.status_code == 400
-    r = await client.post("/api/v1/auth/password/change", headers=auth(a),
-                          json={"current_password": "An0therPassword!", "new_password": "Something123New"})
+    r = await client.post(
+        "/api/v1/auth/password/change", headers=auth(a), json={"current_password": "An0therPassword!", "new_password": "Something123New"}
+    )
     assert r.status_code == 200
     assert (await client.get("/api/v1/auth/me", headers=auth(a))).status_code == 200  # this device stays
     assert (await client.get("/api/v1/auth/me", headers=auth(b))).status_code == 401  # others signed out
@@ -134,7 +138,8 @@ async def test_unauthenticated_and_forged_tokens(client, installed):
     assert (await client.get("/api/v1/auth/me", headers=auth("not.a.token"))).status_code == 401
     import jwt
 
-    forged = jwt.encode({"sub": "00000000-0000-0000-0000-000000000000", "sid": "x", "typ": "access", "exp": 9999999999},
-                        "wrong-key", algorithm="HS256")
+    forged = jwt.encode(
+        {"sub": "00000000-0000-0000-0000-000000000000", "sid": "x", "typ": "access", "exp": 9999999999}, "wrong-key", algorithm="HS256"
+    )
     assert (await client.get("/api/v1/auth/me", headers=auth(forged))).status_code == 401
     assert secrets.get("jwt_signing_key")  # generated, never from source

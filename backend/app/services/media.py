@@ -15,8 +15,14 @@ from ..core.errors import AppError
 from ..models import Media
 from . import storage
 
-IMAGE_MIMES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/x-icon": "ico",
-               "image/vnd.microsoft.icon": "ico"}
+IMAGE_MIMES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/x-icon": "ico",
+    "image/vnd.microsoft.icon": "ico",
+}
 DOC_MIMES = {
     "application/pdf": "pdf",
     "application/msword": "doc",
@@ -85,8 +91,17 @@ def _safe_name(name: str) -> str:
     return base or "file"
 
 
-async def upload(db: AsyncSession, *, data: bytes, filename: str, folder: str = "general", alt: str = "",
-                 images_only: bool = False, actor=None, private: bool = False) -> Media:
+async def upload(
+    db: AsyncSession,
+    *,
+    data: bytes,
+    filename: str,
+    folder: str = "general",
+    alt: str = "",
+    images_only: bool = False,
+    actor=None,
+    private: bool = False,
+) -> Media:
     sec = await settings_store.get_group(db, "security")
     if len(data) > sec.max_upload_mb * 1024 * 1024:
         raise AppError(413, "FILE_TOO_LARGE", f"The file is larger than {sec.max_upload_mb} MB.")
@@ -96,8 +111,7 @@ async def upload(db: AsyncSession, *, data: bytes, filename: str, folder: str = 
     is_image = mime in IMAGE_MIMES
     if images_only and not is_image:
         raise AppError(415, "IMAGE_REQUIRED", "Please upload an image (JPG, PNG, WebP, GIF or ICO).")
-    if ext not in sec.allowed_file_types and not (is_image and ext in ("jpg", "jpeg", "png", "webp", "gif", "ico")
-                                                  and images_only):
+    if ext not in sec.allowed_file_types and not (is_image and ext in ("jpg", "jpeg", "png", "webp", "gif", "ico") and images_only):
         raise AppError(415, "FILE_TYPE_NOT_ALLOWED", f".{ext} files are not allowed.")
     width = height = None
     variants_raw: list[tuple[int, bytes, int]] = []
@@ -113,8 +127,20 @@ async def upload(db: AsyncSession, *, data: bytes, filename: str, folder: str = 
         vkey = f"{folder}/{stamp}/{uid}-{vw}.webp"
         await store.put(vkey, vdata, "image/webp", private=private)
         variants[str(vw)] = {"key": vkey, "width": vw, "height": vh}
-    m = Media(storage=store.name, key=key, filename=_safe_name(filename), mime=mime, size=len(data), width=width,
-              height=height, variants=variants, alt=alt[:300], folder=folder[:60], uploaded_by=actor, private=private)
+    m = Media(
+        storage=store.name,
+        key=key,
+        filename=_safe_name(filename),
+        mime=mime,
+        size=len(data),
+        width=width,
+        height=height,
+        variants=variants,
+        alt=alt[:300],
+        folder=folder[:60],
+        uploaded_by=actor,
+        private=private,
+    )
     db.add(m)
     await db.flush()
     return m
@@ -127,10 +153,19 @@ async def to_public(db: AsyncSession, m: Media | None) -> dict | None:
     # Files keep the address of the storage they were written to (switching provider does not move them).
     url = store.url if (m.storage == store.name) else (lambda k: f"/media/{k}")
     return {
-        "id": str(m.id), "url": url(m.key), "filename": m.filename, "mime": m.mime, "size": m.size,
-        "width": m.width, "height": m.height, "alt": m.alt, "folder": m.folder,
-        "variants": [{"width": v["width"], "height": v["height"], "url": url(v["key"])}
-                     for v in sorted(m.variants.values(), key=lambda v: v["width"])],
+        "id": str(m.id),
+        "url": url(m.key),
+        "filename": m.filename,
+        "mime": m.mime,
+        "size": m.size,
+        "width": m.width,
+        "height": m.height,
+        "alt": m.alt,
+        "folder": m.folder,
+        "variants": [
+            {"width": v["width"], "height": v["height"], "url": url(v["key"])}
+            for v in sorted(m.variants.values(), key=lambda v: v["width"])
+        ],
         "created_at": m.created_at,
     }
 
@@ -146,7 +181,13 @@ def download_response(m: Media, data: bytes):
     from fastapi.responses import Response
 
     inline = m.mime.startswith("image/") or m.mime == "application/pdf"
-    return Response(content=data, media_type=m.mime, headers={
-        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
-        "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{m.filename}"'})
+    return Response(
+        content=data,
+        media_type=m.mime,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+            "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{m.filename}"',
+        },
+    )

@@ -10,7 +10,7 @@ from ...core import settings_store
 from ...core.deps import Principal
 from ...core.errors import not_found
 from ...models import AlumniProfile, Batch, Event, EventFeedback, EventMedia, EventRegistration, Media, User
-from ...services import live, media, notifications
+from ...services import custom_fields, live, media, notifications
 
 KINDS = {
     "reunion": "Annual reunion",
@@ -102,6 +102,9 @@ async def event_out(db: AsyncSession, p: Principal, ev: Event, detail: bool = Fa
     }
     if detail:
         out["description"] = ev.description
+        staff = p.can("events.view")
+        out["custom_fields"] = (ev.custom_fields or {}) if staff else None
+        out["extra_fields"] = await custom_fields.visible_for(db, "event", ev.custom_fields, "owner" if staff else "member")
         out["online_url"] = ev.online_url if (active or p.can("events.view")) else None
         gallery = (
             await db.execute(select(EventMedia.media_id).where(EventMedia.event_id == ev.id).order_by(EventMedia.position))
@@ -139,12 +142,20 @@ async def promote_waitlist(db: AsyncSession, ev: Event) -> int:
         promoted += 1
         u = await db.get(User, nxt.user_id)
         await notifications.notify(
-            db, u.id, "events", "promoted", f"A place opened up: {ev.title}", link=f"/portal/events/{ev.id}",
-            email=("events.promoted", {
-                "event": ev.title,
-                "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
-                "link": f"{general.app_url}/portal/events/{ev.id}",
-            }),
+            db,
+            u.id,
+            "events",
+            "promoted",
+            f"A place opened up: {ev.title}",
+            link=f"/portal/events/{ev.id}",
+            email=(
+                "events.promoted",
+                {
+                    "event": ev.title,
+                    "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
+                    "link": f"{general.app_url}/portal/events/{ev.id}",
+                },
+            ),
         )
         live.emit_to_user(db, u.id, "event:registration", {"event_id": str(ev.id), "status": "registered"})
 

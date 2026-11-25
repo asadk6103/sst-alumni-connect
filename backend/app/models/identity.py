@@ -62,9 +62,7 @@ class User(UUIDPk, Timestamps, SoftDelete, Base):
     language: Mapped[str | None] = mapped_column(String(10))
     roles: Mapped[list[Role]] = relationship(secondary=user_roles, lazy="selectin")
 
-    __table_args__ = (
-        Index("uq_users_email_lower", text("lower(email)"), unique=True, postgresql_where=text("deleted_at IS NULL")),
-    )
+    __table_args__ = (Index("uq_users_email_lower", text("lower(email)"), unique=True, postgresql_where=text("deleted_at IS NULL")),)
 
 
 class Session(UUIDPk, Base):

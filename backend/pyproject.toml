@@ -60,3 +60,5 @@ package = false
 "tests/conftest.py" = ["E402"]  # environment must be set before the app is imported
 "app/services/templates.py" = ["E501"]  # HTML email bodies
 "alembic/versions/*" = ["E501"]  # generated DDL
+"app/services/exports.py" = ["E501"]  # OOXML namespace strings
+"app/modules/cms/seed.py" = ["E501"]  # starter copy

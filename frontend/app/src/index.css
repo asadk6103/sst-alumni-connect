@@ -26,3 +26,26 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Urdu and other right-to-left languages: Naskh/Nastaliq system fonts, a little more line height. */
+html[lang='ur'] body, html[lang='ar'] body {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', 'Segoe UI', Tahoma, sans-serif;
+  line-height: 1.8;
+}
+html[dir='rtl'] .ltr-only { direction: ltr; }
+
+/* Safe article HTML (escaped on the server, then a small syntax applied). */
+.prose-sst { color: rgb(var(--ink)); line-height: 1.75; font-size: 15px; }
+.prose-sst h2 { font-family: var(--font-heading); font-size: 1.35rem; font-weight: 600; margin: 1.4em 0 .5em !important; }
+.prose-sst h3 { font-family: var(--font-heading); font-size: 1.12rem; font-weight: 600; margin: 1.2em 0 .4em !important; }
+.prose-sst p { margin: 0 0 1em; }
+.prose-sst ul { list-style: disc; padding-inline-start: 1.4em; margin: 0 0 1em; }
+.prose-sst a { color: rgb(var(--primary)); text-decoration: underline; }
+
+/* Printable reports: only the workspace. */
+@media print {
+  body { background: #fff !important; }
+  aside, header, nav, .print\:hidden { display: none !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  .shadow-card { box-shadow: none !important; }
+}

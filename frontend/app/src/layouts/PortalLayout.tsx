@@ -7,26 +7,28 @@ import { useAuth } from '@/lib/auth';
 import { LiveProvider } from '@/lib/live';
 import { useSite } from '@/lib/site';
 import { cn } from '@/lib/utils';
+import { LanguageSwitcher, useT } from '@/lib/i18n';
 import { BrandMark } from '@/components/brand';
 import { NotificationBell } from '@/components/notifications';
 import { UserMenu } from './UserMenu';
 
-type Item = { to: string; label: string; end?: boolean; perm?: string; module?: string };
+type Item = { to: string; label: string; key: string; end?: boolean; perm?: string; module?: string };
 // Sections appear as their modules are delivered (community, events, jobs … from Stage 3).
 const PORTAL_NAV: Item[] = [
-  { to: '/portal', label: 'Dashboard', end: true },
-  { to: '/portal/directory', label: 'Directory', perm: 'portal.directory', module: 'directory' },
-  { to: '/portal/community', label: 'Community', perm: 'portal.react', module: 'community' },
-  { to: '/portal/events', label: 'Events', module: 'events' },
-  { to: '/portal/jobs', label: 'Jobs', perm: 'portal.jobs.view', module: 'jobs' },
-  { to: '/portal/mentorship', label: 'Mentorship', module: 'mentorship' },
-  { to: '/portal/messages', label: 'Messages', perm: 'portal.message', module: 'messaging' },
+  { to: '/portal', label: 'Dashboard', key: 'nav.dashboard', end: true },
+  { to: '/portal/directory', label: 'Directory', key: 'nav.directory', perm: 'portal.directory', module: 'directory' },
+  { to: '/portal/community', label: 'Community', key: 'nav.community', perm: 'portal.react', module: 'community' },
+  { to: '/portal/events', label: 'Events', key: 'nav.events', module: 'events' },
+  { to: '/portal/jobs', label: 'Jobs', key: 'nav.jobs', perm: 'portal.jobs.view', module: 'jobs' },
+  { to: '/portal/mentorship', label: 'Mentorship', key: 'nav.mentorship', module: 'mentorship' },
+  { to: '/portal/messages', label: 'Messages', key: 'nav.messages', perm: 'portal.message', module: 'messaging' },
 ];
 
 /** Dark navy global top navigation from the design, white workspace below. */
 export function PortalLayout() {
   const { user, can } = useAuth();
   const site = useSite();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -46,18 +48,18 @@ export function PortalLayout() {
           <Link to="/portal" className="flex min-w-0 items-center gap-4">
             <BrandMark light size={38} />
             <span className="hidden h-8 w-px bg-white/20 md:block" />
-            <span className="hidden whitespace-nowrap font-heading text-[15px] font-semibold md:block">Alumni Portal</span>
+            <span className="hidden whitespace-nowrap font-heading text-[15px] font-semibold md:block">{t('site.portal', 'Alumni Portal')}</span>
           </Link>
-          <nav aria-label="Portal" className="ml-4 hidden h-full items-stretch gap-1 xl:flex">
-            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(false)}>{i.label}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
-            {user?.is_staff && <NavLink to="/admin" className={link(false)}>Administration</NavLink>}
+          <nav aria-label="Portal" className="ms-4 hidden h-full items-stretch gap-1 xl:flex">
+            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(false)}>{t(i.key, i.label)}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
+            {user?.is_staff && <NavLink to="/admin" className={link(false)}>{t('nav.admin', 'Administration')}</NavLink>}
           </nav>
-          <div className="ml-auto flex items-center gap-2"><NotificationBell light /><UserMenu light /></div>
+          <div className="ms-auto flex items-center gap-2"><LanguageSwitcher light className="hidden sm:inline-flex" /><NotificationBell light /><UserMenu light /></div>
         </div>
         {open && (
           <nav aria-label="Portal" className="border-t border-white/10 px-4 py-2 xl:hidden">
-            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(true)}>{i.label}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
-            {user?.is_staff && <NavLink to="/admin" className={link(true)}>Administration</NavLink>}
+            {items.map((i) => <NavLink key={i.to} to={i.to} end={i.end} className={link(true)}>{t(i.key, i.label)}{i.to === '/portal/messages' && <UnreadBadge />}</NavLink>)}
+            {user?.is_staff && <NavLink to="/admin" className={link(true)}>{t('nav.admin', 'Administration')}</NavLink>}
           </nav>
         )}
       </header>
@@ -72,5 +74,5 @@ function UnreadBadge() {
   const q = useQuery({ queryKey: ['unread'], queryFn: () => get<{ total: number }>('/api/v1/messages/unread'), enabled: can('portal.message'), refetchInterval: 120_000 });
   const n = q.data?.total ?? 0;
   if (!n) return null;
-  return <span className="ml-1.5 rounded-full bg-secondary px-1.5 text-[11px] font-semibold leading-[18px] text-white" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>;
+  return <span className="ms-1.5 rounded-full bg-secondary px-1.5 text-[11px] font-semibold leading-[18px] text-white" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>;
 }

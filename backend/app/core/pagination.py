@@ -39,5 +39,6 @@ def csv_response(filename: str, header: list[str], rows: Iterable[list]) -> Stre
             w.writerow([("'" + v) if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v for v in r])
             yield buf.getvalue()
 
-    return StreamingResponse(gen(), media_type="text/csv; charset=utf-8",
-                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return StreamingResponse(
+        gen(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

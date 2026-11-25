@@ -60,17 +60,32 @@ async def _sweep(db) -> int:
     """Re-dispatch deliveries still queued (never picked up, e.g. the broker was down)."""
     cutoff = datetime.now(UTC) - timedelta(minutes=2)
     oldest = datetime.now(UTC) - timedelta(days=1)
-    rows = (await db.execute(
-        select(NotificationLog).where(NotificationLog.status == "queued", NotificationLog.created_at < cutoff,
-                                      NotificationLog.created_at > oldest, NotificationLog.attempts == 0,
-                                      NotificationLog.payload.is_not(None)).limit(200)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(NotificationLog)
+                .where(
+                    NotificationLog.status == "queued",
+                    NotificationLog.created_at < cutoff,
+                    NotificationLog.created_at > oldest,
+                    NotificationLog.attempts == 0,
+                    NotificationLog.payload.is_not(None),
+                )
+                .limit(200)
+            )
+        )
+        .scalars()
+        .all()
+    )
     for r in rows:
         dispatch("app.tasks.send_email" if r.channel == "email" else "app.tasks.send_sms", {"log_id": r.id, **r.payload})
-    stale = (await db.execute(
-        update(NotificationLog).where(NotificationLog.status == "queued", NotificationLog.created_at <= oldest)
-        .values(status="failed", error="Expired in queue.")
-    )).rowcount
+    stale = (
+        await db.execute(
+            update(NotificationLog)
+            .where(NotificationLog.status == "queued", NotificationLog.created_at <= oldest)
+            .values(status="failed", error="Expired in queue.")
+        )
+    ).rowcount
     return len(rows) + (stale or 0)
 
 
@@ -81,8 +96,11 @@ def sweep_outbox():
 
 async def _cleanup(db) -> dict:
     now = datetime.now(UTC)
-    s = (await db.execute(delete(Session).where(or_(Session.expires_at < now - timedelta(days=7),
-                                                     Session.revoked_at < now - timedelta(days=7))))).rowcount
+    s = (
+        await db.execute(
+            delete(Session).where(or_(Session.expires_at < now - timedelta(days=7), Session.revoked_at < now - timedelta(days=7)))
+        )
+    ).rowcount
     v = (await db.execute(delete(UserVerification).where(UserVerification.expires_at < now - timedelta(days=7)))).rowcount
     a = (await db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < now - timedelta(days=90)))).rowcount
     return {"sessions": s, "verifications": v, "login_attempts": a}
@@ -91,7 +109,6 @@ async def _cleanup(db) -> dict:
 @celery_app.task(name="app.tasks.cleanup")
 def cleanup():
     return _run(_cleanup)
-
 
 
 async def _event_reminders(db) -> int:
@@ -130,5 +147,6 @@ async def _scheduled_newsletters(db) -> int:
 @celery_app.task(name="app.tasks.scheduled_newsletters")
 def scheduled_newsletters():
     return _run(_scheduled_newsletters)
+
 
 __all__ = ["dispatch"]

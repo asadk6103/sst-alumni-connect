@@ -20,6 +20,8 @@ from .modules.admin import health as admin_health
 from .modules.admin import media as admin_media
 from .modules.admin import roles as admin_roles
 from .modules.admin import users as admin_users
+from .modules.administration import custom_fields as custom_fields_api
+from .modules.administration import localization, reports
 from .modules.alumni import admin as alumni_admin
 from .modules.alumni import batches as alumni_batches
 from .modules.alumni import dashboard as alumni_dashboard
@@ -27,6 +29,9 @@ from .modules.alumni import portal as alumni_portal
 from .modules.alumni import records as alumni_records
 from .modules.alumni import registration as alumni_registration
 from .modules.auth.router import router as auth_router
+from .modules.cms import news as news_api
+from .modules.cms import pages as cms_pages
+from .modules.cms import site as cms_site
 from .modules.community import admin as community_admin
 from .modules.community import router as community
 from .modules.configuration.router import router as config_router
@@ -86,12 +91,13 @@ class DynamicCORS:
         origin = dict(scope.get("headers", [])).get(b"origin", b"").decode()
         if not origin or not await self._allowed(origin):
             return await self.app(scope, receive, send)
-        cors = [(b"access-control-allow-origin", origin.encode()), (b"access-control-allow-credentials", b"true"),
-                (b"vary", b"Origin")]
+        cors = [(b"access-control-allow-origin", origin.encode()), (b"access-control-allow-credentials", b"true"), (b"vary", b"Origin")]
         if scope["method"] == "OPTIONS":
-            headers = cors + [(b"access-control-allow-methods", b"GET, POST, PUT, PATCH, DELETE"),
-                              (b"access-control-allow-headers", b"authorization, content-type, idempotency-key"),
-                              (b"access-control-max-age", b"600")]
+            headers = cors + [
+                (b"access-control-allow-methods", b"GET, POST, PUT, PATCH, DELETE"),
+                (b"access-control-allow-headers", b"authorization, content-type, idempotency-key"),
+                (b"access-control-max-age", b"600"),
+            ]
             await send({"type": "http.response.start", "status": 204, "headers": headers})
             await send({"type": "http.response.body", "body": b""})
             return
@@ -124,14 +130,61 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     errors.install(app)
-    for r in (setup_router, auth_router, public_router, admin_users.router, admin_roles.router, admin_audit.router,
-              admin_media.router, admin_health.router, admin_dashboard.router, config_router, alumni_registration.router,
-              alumni_dashboard.router, alumni_portal.router, alumni_admin.router, alumni_records.router, alumni_batches.router,
-              community.router, community_admin.router, messaging.router, events.router, events.admin,
-              jobs.router, jobs.admin, mentorship.router, mentorship.admin, achievements.router, achievements.admin, achievements.public,
-              notifications_api.router, donations.router, donations.admin, donations.public, donations.scholarships_router,
-              donations.scholarships_admin, newsletters.public, newsletters.router, newsletters.admin, gallery.router, gallery.public,
-              gallery.admin):
+    for r in (
+        setup_router,
+        auth_router,
+        public_router,
+        admin_users.router,
+        admin_roles.router,
+        admin_audit.router,
+        admin_media.router,
+        admin_health.router,
+        admin_dashboard.router,
+        config_router,
+        alumni_registration.router,
+        alumni_dashboard.router,
+        alumni_portal.router,
+        alumni_admin.router,
+        alumni_records.router,
+        alumni_batches.router,
+        community.router,
+        community_admin.router,
+        messaging.router,
+        events.router,
+        events.admin,
+        jobs.router,
+        jobs.admin,
+        mentorship.router,
+        mentorship.admin,
+        achievements.router,
+        achievements.admin,
+        achievements.public,
+        notifications_api.router,
+        donations.router,
+        donations.admin,
+        donations.public,
+        donations.scholarships_router,
+        donations.scholarships_admin,
+        newsletters.public,
+        newsletters.router,
+        newsletters.admin,
+        gallery.router,
+        gallery.public,
+        gallery.admin,
+        custom_fields_api.admin,
+        custom_fields_api.router,
+        custom_fields_api.public,
+        localization.public,
+        localization.admin,
+        reports.router,
+        cms_pages.admin,
+        cms_pages.public,
+        news_api.admin,
+        news_api.public,
+        news_api.router,
+        cms_site.admin,
+        cms_site.public,
+    ):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))
     app.add_middleware(GZipMiddleware, minimum_size=1024)

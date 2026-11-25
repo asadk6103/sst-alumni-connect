@@ -110,8 +110,11 @@ export function qs(params: Record<string, string | number | boolean | null | und
 export async function download(path: string, filename: string) {
   const res = await api<Response>(path, { raw: true });
   const blob = await res.blob();
+  // Prefer the server's file name (e.g. report-20260101-20261231.pdf).
+  const cd = res.headers.get('content-disposition') ?? '';
+  const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd)?.[1];
   const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  const a = Object.assign(document.createElement('a'), { href: url, download: named ? decodeURIComponent(named) : filename });
   a.click();
   URL.revokeObjectURL(url);
 }

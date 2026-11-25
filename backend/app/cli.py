@@ -1,10 +1,10 @@
 """Operator commands (run inside the api container):
 
-    python -m app.cli setup-code                  show the first-run setup code
-    python -m app.cli create-admin EMAIL "NAME"   create a Super Administrator (prompts for a password)
-    python -m app.cli reset-password EMAIL        set a new password (prompts) and sign the user out
-    python -m app.cli reset-mfa EMAIL             turn off two-factor authentication for a user
-    python -m app.cli rotate-key jwt|encryption   rotate a key (jwt: signs everyone out)
+python -m app.cli setup-code                  show the first-run setup code
+python -m app.cli create-admin EMAIL "NAME"   create a Super Administrator (prompts for a password)
+python -m app.cli reset-password EMAIL        set a new password (prompts) and sign the user out
+python -m app.cli reset-mfa EMAIL             turn off two-factor authentication for a user
+python -m app.cli rotate-key jwt|encryption   rotate a key (jwt: signs everyone out)
 """
 
 import asyncio
@@ -57,8 +57,17 @@ async def main(argv: list[str]) -> None:
                 sys.exit("Password must contain " + ", ".join(problems) + ".")
             role = (await db.execute(select(Role).where(Role.key == SUPER_ADMIN))).scalar_one()
             now = datetime.now(UTC)
-            db.add(User(email=email.lower(), full_name=name, password_hash=hash_password(pw), status="active",
-                        email_verified_at=now, password_changed_at=now, roles=[role]))
+            db.add(
+                User(
+                    email=email.lower(),
+                    full_name=name,
+                    password_hash=hash_password(pw),
+                    status="active",
+                    email_verified_at=now,
+                    password_changed_at=now,
+                    roles=[role],
+                )
+            )
             await db.commit()
             print(f"Created Super Administrator {email}.")
         elif cmd == "reset-password" and len(args) == 1:
@@ -80,8 +89,10 @@ async def main(argv: list[str]) -> None:
             print(f"Two-factor authentication turned off for {u.email}.")
         elif cmd == "rotate-key" and args and args[0] in ("jwt", "encryption"):
             if args[0] == "encryption" and "--force" not in args:
-                sys.exit("Rotating the encryption key makes stored integration secrets and two-factor secrets "
-                         "unreadable (they must be re-entered). Run again with --force to proceed.")
+                sys.exit(
+                    "Rotating the encryption key makes stored integration secrets and two-factor secrets "
+                    "unreadable (they must be re-entered). Run again with --force to proceed."
+                )
             secrets.rotate("jwt_signing_key" if args[0] == "jwt" else "encryption_key")
             print("Key rotated. Restart the api and realtime containers.")
         else:

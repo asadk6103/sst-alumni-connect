@@ -11,6 +11,7 @@ import { cn, fmtDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, Badge, Card, CardHeader, EmptyState, PageHeader, Skeleton } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
+import { ExtraFields, type ExtraField } from '@/components/customFields';
 import { Dialog, Tabs, useConfirm } from '@/components/ui/overlay';
 import { Pagination } from '@/components/ui/table';
 import { RichText } from '@/components/community';
@@ -21,7 +22,7 @@ export type EventT = {
   address: string | null; is_online: boolean; capacity: number | null; seats_left: number | null; registered_count: number; max_guests: number;
   registration_deadline: string | null; registration_open: boolean; status: string; cancel_reason: string | null; batch: string | null; batch_id: string | null;
   is_past: boolean; my_registration: { id: string; status: string; guests: number; checkin_code: string | null } | null;
-  description?: string; online_url?: string | null; gallery?: Img[];
+  description?: string; online_url?: string | null; gallery?: Img[]; custom_fields?: Record<string, unknown> | null; extra_fields?: ExtraField[];
   feedback?: { average: number | null; count: number; mine: { rating: number; comment: string | null } | null };
 };
 
@@ -129,6 +130,7 @@ export function EventPage() {
             </div>
           </Card>
           {e.description && <Card><CardHeader title="About this event" /><div className="p-5"><RichText text={e.description} /></div></Card>}
+          {!!e.extra_fields?.length && <Card><CardHeader title="More details" /><ExtraFields className="p-5" items={e.extra_fields} fileHref={(k) => `/api/v1/custom-fields/event/${e.id}/${k}/file`} /></Card>}
           {!!e.gallery?.length && (
             <Card><CardHeader title="Photos" />
               <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3">{e.gallery.map((g, i) => g && (

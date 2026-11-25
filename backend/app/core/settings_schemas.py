@@ -45,7 +45,8 @@ class SecuritySettings(BaseModel):
     require_email_verification: bool = True
     require_phone_verification: bool = False
     allowed_file_types: list[str] = Field(
-        default_factory=lambda: ["jpg", "jpeg", "png", "webp", "gif", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"])
+        default_factory=lambda: ["jpg", "jpeg", "png", "webp", "gif", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"]
+    )
     max_upload_mb: int = Field(10, ge=1, le=100)
     allowed_origins: list[str] = Field(default_factory=list)
     login_notifications: bool = True
@@ -113,6 +114,31 @@ class DonationSettings(BaseModel):
     receipt_footer: str = Field("", max_length=500)
     min_amount: int = Field(100, ge=1, le=10_000_000)
     show_donor_wall: bool = True
+
+
+class WebsiteSettings(BaseModel):
+    """Public website: home page, footer, social links and what the website shows."""
+
+    home_page: str | None = Field(None, max_length=120, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")  # CMS page slug; empty = built-in landing
+    footer_text: str = Field("", max_length=500)
+    facebook: str | None = Field(None, max_length=300)
+    instagram: str | None = Field(None, max_length=300)
+    linkedin: str | None = Field(None, max_length=300)
+    youtube: str | None = Field(None, max_length=300)
+    x: str | None = Field(None, max_length=300)
+    show_events: bool = True  # published, non-batch events (online links are never shown publicly)
+    contact_form: bool = True
+    contact_recipient: EmailStr | None = None  # defaults to the general contact email
+
+    @field_validator("facebook", "instagram", "linkedin", "youtube", "x")
+    @classmethod
+    def _social(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        HttpUrl(v)
+        if not v.lower().startswith(("https://", "http://")):
+            raise ValueError("Enter a full address starting with https://")
+        return v
 
 
 # key: (title, description) — widgets of modules that are not delivered yet are added with their module.
@@ -201,6 +227,7 @@ SETTINGS_GROUPS: dict[str, type[BaseModel]] = {
     "alumni": AlumniSettings,
     "dashboard": DashboardSettings,
     "donations": DonationSettings,
+    "website": WebsiteSettings,
 }
 
 RESTART_FIELDS = {"realtime": ["max_connections_per_gateway", "heartbeat_interval_seconds", "connection_timeout_seconds"]}

@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useAction } from '@/lib/hooks';
 import { ACHIEVEMENT_KINDS, classLabel, headline, monthYear, photoUrl, place, type PersonCard, type ProfileDetail } from '@/lib/alumni';
 import { cn, fmtDate } from '@/lib/utils';
+import { ExtraFields } from '@/components/customFields';
 import { Button } from '@/components/ui/button';
 import { Avatar, Badge, Card, CardHeader, EmptyState } from '@/components/ui/display';
 
@@ -166,6 +167,12 @@ export function ProfileBody({ p, header = true, actions }: { p: ProfileDetail; h
               ))}
             </ul>
           </Card>
+          {!!p.extra_fields?.length && (
+            <Card>
+              <CardHeader title="Additional details" />
+              <ExtraFields className="p-5" items={p.extra_fields} fileHref={(k) => `/api/v1/custom-fields/alumni_profile/${p.id}/${k}/file`} />
+            </Card>
+          )}
           {p.achievements.length > 0 && (
             <Card>
               <CardHeader title="Achievements" icon={Award} />

@@ -13,8 +13,18 @@ PW = "Str0ngPassword!"
 
 
 async def _register(client, email, name, **extra):
-    body = {"full_name": name, "email": email, "phone": "+92 300 1112233", "password": PW, "accept_terms": True,
-            "graduation_year": 2012, "admission_year": 2002, "city": "Lahore", "country": "Pakistan", **extra}
+    body = {
+        "full_name": name,
+        "email": email,
+        "phone": "+92 300 1112233",
+        "password": PW,
+        "accept_terms": True,
+        "graduation_year": 2012,
+        "admission_year": 2002,
+        "city": "Lahore",
+        "country": "Pakistan",
+        **extra,
+    }
     r = await client.post("/api/v1/auth/register", json=body)
     assert r.status_code == 201, r.text
     return r
@@ -41,8 +51,15 @@ async def _relogin(client, email):
 
 
 async def test_registration_validation_and_no_account_discovery(client, installed):
-    base = {"full_name": "Val Idation", "email": "val@example.org", "phone": "+923001234567", "password": PW,
-            "graduation_year": 2010, "city": "Multan", "country": "Pakistan"}
+    base = {
+        "full_name": "Val Idation",
+        "email": "val@example.org",
+        "phone": "+923001234567",
+        "password": PW,
+        "graduation_year": 2010,
+        "city": "Multan",
+        "country": "Pakistan",
+    }
     r = await client.post("/api/v1/auth/register", json=base)
     assert r.status_code == 422 and r.json()["error"]["details"][0]["field"] == "accept_terms"
     r = await client.post("/api/v1/auth/register", json={**base, "accept_terms": True, "graduation_year": 2099})
@@ -56,8 +73,11 @@ async def test_registration_validation_and_no_account_discovery(client, installe
     worker.TEST_OUTBOX.clear()
     r2 = await client.post("/api/v1/auth/register", json={**base, "accept_terms": True, "full_name": "Someone Else"})
     assert r1.status_code == r2.status_code == 201 and r1.json() == r2.json()
-    assert any(p.get("template") == "auth.account_exists" or "already exists" in p.get("html", "")
-               for n, p in worker.TEST_OUTBOX if n == "app.tasks.send_email")
+    assert any(
+        p.get("template") == "auth.account_exists" or "already exists" in p.get("html", "")
+        for n, p in worker.TEST_OUTBOX
+        if n == "app.tasks.send_email"
+    )
     # not verified, cannot sign in before confirming the email
     r = await client.post("/api/v1/auth/login", json={"email": "val@example.org", "password": PW})
     assert r.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
@@ -95,10 +115,12 @@ async def test_unverified_member_is_limited_until_admin_approves(client, install
 
 
 async def test_record_match_needs_proven_contact(client, installed):
-    csv_data = ("registration_no,full_name,graduation_year,batch,email\n"
-                "SST-1001,Hamza Ali Raza,2015,Class of 2015,hamza@example.org\n"
-                "SST-1002,Sana Iqbal,2015,Class of 2015,\n"
-                "SST-1003,,2015,,\n")
+    csv_data = (
+        "registration_no,full_name,graduation_year,batch,email\n"
+        "SST-1001,Hamza Ali Raza,2015,Class of 2015,hamza@example.org\n"
+        "SST-1002,Sana Iqbal,2015,Class of 2015,\n"
+        "SST-1003,,2015,,\n"
+    )
     files = {"file": ("records.csv", csv_data, "text/csv")}
     r = await client.post("/api/v1/admin/student-records/import", headers=auth(installed), files=files, data={"dry_run": "true"})
     d = r.json()["data"]
@@ -108,14 +130,16 @@ async def test_record_match_needs_proven_contact(client, installed):
     assert r.json()["data"]["created"] == 2
 
     # Same registration number + name + year, and the email on record is proven → verified automatically.
-    token, uid = await _member(client, "hamza@example.org", "Hamza Raza", graduation_year=2015, admission_year=2005,
-                               registration_no="sst 1001")
+    token, uid = await _member(
+        client, "hamza@example.org", "Hamza Raza", graduation_year=2015, admission_year=2005, registration_no="sst 1001"
+    )
     me = (await client.get("/api/v1/alumni/me", headers=auth(token))).json()["data"]
     assert me["verification"]["status"] == "verified" and me["verification"]["method"] == "record_match"
     assert me["batch"] == "Class of 2015"
     # Someone else claiming a record without its contact details is only flagged for review.
-    token2, uid2 = await _member(client, "not-sana@example.org", "Sana Iqbal", graduation_year=2015, admission_year=2005,
-                                 registration_no="SST1002")
+    token2, uid2 = await _member(
+        client, "not-sana@example.org", "Sana Iqbal", graduation_year=2015, admission_year=2005, registration_no="SST1002"
+    )
     me2 = (await client.get("/api/v1/alumni/me", headers=auth(token2))).json()["data"]
     assert me2["verification"]["status"] == "pending"
     q = (await client.get("/api/v1/admin/verification?match=any", headers=auth(installed))).json()["data"]
@@ -130,8 +154,12 @@ async def test_record_match_needs_proven_contact(client, installed):
 
 async def test_invite_from_records_and_verification_codes(client, installed):
     csv_data = "Reg No,Student Name,Passing Year,Email\nSST-2001,Bilal Ahmed,2016,bilal@example.org\n"
-    r = await client.post("/api/v1/admin/student-records/import", headers=auth(installed),
-                          files={"file": ("r.csv", csv_data, "text/csv")}, data={"dry_run": "false"})
+    r = await client.post(
+        "/api/v1/admin/student-records/import",
+        headers=auth(installed),
+        files={"file": ("r.csv", csv_data, "text/csv")},
+        data={"dry_run": "false"},
+    )
     assert r.json()["data"]["created"] == 1
     rec = (await client.get("/api/v1/admin/student-records?q=SST-2001", headers=auth(installed))).json()["data"][0]
     r = await client.post("/api/v1/admin/student-records/invite", headers=auth(installed), json={"ids": [rec["id"]]})
@@ -143,8 +171,7 @@ async def test_invite_from_records_and_verification_codes(client, installed):
     assert me["verification"]["status"] == "verified" and me["verification"]["method"] == "import"
 
     # institutional code: shown once, single use, can be revoked
-    r = await client.post("/api/v1/admin/verification-codes", headers=auth(installed),
-                          json={"label": "Reunion 2026 desk", "count": 2})
+    r = await client.post("/api/v1/admin/verification-codes", headers=auth(installed), json={"label": "Reunion 2026 desk", "count": 2})
     codes = r.json()["data"]["codes"]
     assert len(codes) == 2
     token_a, _ = await _member(client, "coder@example.org", "Code Redeemer")
@@ -164,24 +191,42 @@ async def test_profile_sections_completion_and_private_documents(client, install
     token, uid = await _member(client, "profile@example.org", "Profile Builder")
     h = auth(token)
     start = (await client.get("/api/v1/alumni/me", headers=h)).json()["data"]["completion"]
-    r = await client.put("/api/v1/alumni/me", headers=h, json={
-        "bio": "Software engineer who loves mentoring young people from SST.", "industry": "Information Technology",
-        "linkedin": "linkedin.com/in/someone", "designation": "Engineer", "organization": "Acme"})
+    r = await client.put(
+        "/api/v1/alumni/me",
+        headers=h,
+        json={
+            "bio": "Software engineer who loves mentoring young people from SST.",
+            "industry": "Information Technology",
+            "linkedin": "linkedin.com/in/someone",
+            "designation": "Engineer",
+            "organization": "Acme",
+        },
+    )
     assert r.status_code == 200 and r.json()["data"]["linkedin"] == "https://linkedin.com/in/someone"
     assert (await client.put("/api/v1/alumni/me", headers=h, json={"website": "not a url"})).status_code == 422
     r = await client.put("/api/v1/alumni/me/skills", headers=h, json={"skills": ["Python", "python", "Leadership", "SQL"]})
     assert r.json()["data"] == ["Python", "Leadership", "SQL"]
-    r = await client.post("/api/v1/alumni/me/employment", headers=h, json={
-        "organization": "Globex", "designation": "Lead Engineer", "start_date": "2020-01-01", "is_current": True})
+    r = await client.post(
+        "/api/v1/alumni/me/employment",
+        headers=h,
+        json={"organization": "Globex", "designation": "Lead Engineer", "start_date": "2020-01-01", "is_current": True},
+    )
     assert r.status_code == 201
     emp_id = r.json()["data"]["id"]
-    bad = await client.post("/api/v1/alumni/me/education", headers=h, json={
-        "institution": "LUMS", "qualification": "BSc", "start_year": 2015, "end_year": 2013})
+    bad = await client.post(
+        "/api/v1/alumni/me/education", headers=h, json={"institution": "LUMS", "qualification": "BSc", "start_year": 2015, "end_year": 2013}
+    )
     assert bad.status_code == 422
-    assert (await client.post("/api/v1/alumni/me/education", headers=h, json={
-        "institution": "LUMS", "qualification": "BSc Computer Science", "start_year": 2012, "end_year": 2016})).status_code == 201
-    assert (await client.post("/api/v1/alumni/me/achievements", headers=h, json={
-        "kind": "award", "title": "Best Paper", "year": 2021})).status_code == 201
+    assert (
+        await client.post(
+            "/api/v1/alumni/me/education",
+            headers=h,
+            json={"institution": "LUMS", "qualification": "BSc Computer Science", "start_year": 2012, "end_year": 2016},
+        )
+    ).status_code == 201
+    assert (
+        await client.post("/api/v1/alumni/me/achievements", headers=h, json={"kind": "award", "title": "Best Paper", "year": 2021})
+    ).status_code == 201
     me = (await client.get("/api/v1/alumni/me", headers=h)).json()["data"]
     assert me["designation"] == "Lead Engineer" and me["organization"] == "Globex"  # follows the current position
     assert me["completion"] > start
@@ -214,17 +259,36 @@ async def test_profile_sections_completion_and_private_documents(client, install
 
 
 async def test_directory_search_filters_and_privacy(client, installed):
-    a_tok, a_id = await _member(client, "dir-a@example.org", "Zainab Directory", graduation_year=2018, admission_year=2008,
-                                city="Karachi", country="Pakistan", organization="Hidden Corp", designation="Analyst")
-    b_tok, b_id = await _member(client, "dir-b@example.org", "Yusuf Directory", graduation_year=2018, admission_year=2008,
-                                city="Dubai", country="United Arab Emirates", organization="Open Ltd", designation="Doctor")
+    a_tok, a_id = await _member(
+        client,
+        "dir-a@example.org",
+        "Zainab Directory",
+        graduation_year=2018,
+        admission_year=2008,
+        city="Karachi",
+        country="Pakistan",
+        organization="Hidden Corp",
+        designation="Analyst",
+    )
+    b_tok, b_id = await _member(
+        client,
+        "dir-b@example.org",
+        "Yusuf Directory",
+        graduation_year=2018,
+        admission_year=2008,
+        city="Dubai",
+        country="United Arab Emirates",
+        organization="Open Ltd",
+        designation="Doctor",
+    )
     c_tok, c_id = await _member(client, "dir-c@example.org", "Xenia Hidden", graduation_year=2018)
     for uid in (a_id, b_id, c_id):
         await _approve(client, installed, uid)
     a_tok, b_tok, c_tok = [await _relogin(client, e) for e in ("dir-a@example.org", "dir-b@example.org", "dir-c@example.org")]
     # A keeps career to connections; C hides the whole profile; contact details are private by default
-    r = await client.put("/api/v1/alumni/me/privacy", headers=auth(a_tok),
-                         json={"visibility": "members", "sections": {"career": "connections"}})
+    r = await client.put(
+        "/api/v1/alumni/me/privacy", headers=auth(a_tok), json={"visibility": "members", "sections": {"career": "connections"}}
+    )
     assert r.status_code == 200
     await client.put("/api/v1/alumni/me/privacy", headers=auth(c_tok), json={"visibility": "hidden", "sections": {}})
 
@@ -284,9 +348,18 @@ async def test_batches_dashboard_and_settings(client, installed):
     public = (await client.get("/api/v1/public/batches")).json()
     assert any(b["name"] == "Class of 2001" for b in public["data"]) and public["meta"]["registration_open"]
     # registering with a batch from another year is refused
-    r = await client.post("/api/v1/auth/register", json={
-        "full_name": "Wrong Batch", "email": "wb@example.org", "phone": "+923001234567", "password": PW, "accept_terms": True,
-        "graduation_year": 2003, "batch_id": b2001["id"]})
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Wrong Batch",
+            "email": "wb@example.org",
+            "phone": "+923001234567",
+            "password": PW,
+            "accept_terms": True,
+            "graduation_year": 2003,
+            "batch_id": b2001["id"],
+        },
+    )
     assert r.status_code == 422 and r.json()["error"]["details"][0]["field"] == "batch_id"
 
     # dashboard widgets: admins can hide a widget, and it disappears from members' dashboards
@@ -310,9 +383,17 @@ async def test_batches_dashboard_and_settings(client, installed):
     # registration can be closed
     alumni_cfg = (await client.get("/api/v1/admin/config/settings/alumni", headers=h)).json()["data"]
     await client.put("/api/v1/admin/config/settings/alumni", headers=h, json={**alumni_cfg, "registration_open": False})
-    r = await client.post("/api/v1/auth/register", json={
-        "full_name": "Too Late", "email": "late@example.org", "phone": "+923001234567", "password": PW, "accept_terms": True,
-        "graduation_year": 2003})
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Too Late",
+            "email": "late@example.org",
+            "phone": "+923001234567",
+            "password": PW,
+            "accept_terms": True,
+            "graduation_year": 2003,
+        },
+    )
     assert r.status_code == 403
     await client.put("/api/v1/admin/config/settings/alumni", headers=h, json=alumni_cfg)
     # export respects permission and neutralises formulas

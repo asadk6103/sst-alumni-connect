@@ -11,6 +11,7 @@ import { cn, fmtDate, fmtDateTime, timeAgo } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, Avatar, Badge, Card, CardHeader, EmptyState, PageHeader, Skeleton } from '@/components/ui/display';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
+import { CustomFieldsForm, ExtraFields, customErrors, useCustomFields, type CustomValues, type ExtraField } from '@/components/customFields';
 import { Dialog, Tabs, useConfirm } from '@/components/ui/overlay';
 import { Pagination } from '@/components/ui/table';
 import { RichText, type Author } from '@/components/community';
@@ -21,6 +22,7 @@ export type Job = {
   is_referral: boolean; status: string; employer: { id: string; name: string; logo: string | null; verified: boolean } | null; posted_by: Author | null;
   approved_at: string | null; created_at: string; is_new: boolean; saved: boolean; my_application: { id: string; status: string } | null; is_mine: boolean; closed: boolean;
   description?: string; apply_url?: string | null; apply_email?: string | null; apply_in_portal?: boolean; rejection_reason?: string | null; views?: number; application_count?: number;
+  custom_fields?: Record<string, unknown> | null; extra_fields?: ExtraField[];
 };
 type Resume = { id: string; title: string; is_default: boolean; filename: string | null; size: number | null; created_at: string };
 type App = { id: string; job_id: string; status: string; cover_letter: string | null; resume_id: string | null; applicant: Author | null; created_at: string;
@@ -144,6 +146,7 @@ export function JobPage() {
             {j.skills.length > 0 && <div className="mt-4 flex flex-wrap gap-1.5">{j.skills.map((s) => <Badge key={s} tone="primary">{s}</Badge>)}</div>}
           </Card>
           <Card><CardHeader title="Job description" /><div className="p-5"><RichText text={j.description ?? ''} /></div></Card>
+          {!!j.extra_fields?.length && <Card><CardHeader title="More details" /><ExtraFields className="p-5" items={j.extra_fields} fileHref={(k) => `/api/v1/custom-fields/job_post/${j.id}/${k}/file`} /></Card>}
         </div>
         <aside className="space-y-4">
           <Card className="space-y-3 p-5">
@@ -308,6 +311,8 @@ function JobForm({ job, cats, emps, onDone }: { job?: Job; cats: { id: string; n
     experience: s(job?.experience), skills: job?.skills.join(', ') ?? '', description: s(job?.description), deadline: s(job?.deadline), apply_url: s(job?.apply_url),
     apply_email: s(job?.apply_email), apply_in_portal: job?.apply_in_portal ?? true, is_referral: job?.is_referral ?? false,
   });
+  const defs = useCustomFields('job_post');
+  const [extra, setExtra] = useState<CustomValues>(job?.custom_fields ?? {});
   const set = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
   const n = (v: string) => (v ? Number(v) : null);
   const o = (v: string) => v.trim() || null;
@@ -315,6 +320,7 @@ function JobForm({ job, cats, emps, onDone }: { job?: Job; cats: { id: string; n
     ...f, employer_id: o(f.employer_id), category_id: o(f.category_id), salary_min: n(f.salary_min), salary_max: n(f.salary_max),
     salary_currency: f.salary_min || f.salary_max ? f.salary_currency : null, experience: o(f.experience), deadline: o(f.deadline),
     apply_url: o(f.apply_url), apply_email: o(f.apply_email), skills: f.skills.split(',').map((x) => x.trim()).filter(Boolean),
+    custom_fields: extra,
   } }), { success: (r) => (r.data.status === 'approved' ? 'Job published.' : 'Job submitted. It will be listed after review.'), invalidate: [['my-jobs'], ['jobs']], onSuccess: (r) => onDone(r.data.id) });
   const e = save.fieldErrors;
   const txt = (k: keyof typeof f, label: string, props: Record<string, unknown> = {}) => (
@@ -346,6 +352,7 @@ function JobForm({ job, cats, emps, onDone }: { job?: Job; cats: { id: string; n
             <Checkbox checked={f.is_referral} onCheckedChange={(v) => set('is_referral', v)} label="I can refer suitable alumni (alumni referral)" />
           </div>
           {txt('apply_url', 'External application link', { placeholder: 'https://…' })}{txt('apply_email', 'Application email', { type: 'email' })}
+          {!!defs.data?.length && <div className="border-t border-line pt-4 sm:col-span-2"><CustomFieldsForm defs={defs.data} value={extra} onChange={setExtra} errors={customErrors(e)} /></div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
           <Button asChild variant="outline"><Link to="/portal/jobs/tab/postings">Cancel</Link></Button>

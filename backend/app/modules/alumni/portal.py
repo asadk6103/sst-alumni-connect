@@ -30,7 +30,7 @@ from ...models import (
     VerificationCode,
     VerificationEvent,
 )
-from ...services import media, notifications
+from ...services import custom_fields, media, notifications
 from . import service as svc
 from .schemas import (
     AchievementIn,
@@ -76,6 +76,7 @@ async def own_profile(db: AsyncSession, user: User, profile: AlumniProfile) -> d
             "website": profile.website,
             "linkedin": profile.linkedin,
             "privacy": {"visibility": profile.visibility, "sections": svc.privacy_of(profile)},
+            "custom_fields": profile.custom_fields or {},
             "privacy_sections": svc.PRIVACY_SECTIONS,
             "completion": score,
             "completion_missing": missing,
@@ -137,6 +138,8 @@ async def put_me(body: ProfileIn, p: Principal = Depends(require("portal.access"
     ):
         if f in sent:
             setattr(profile, f, getattr(body, f))
+    if "custom_fields" in sent and body.custom_fields is not None:
+        profile.custom_fields = await custom_fields.clean(db, "alumni_profile", body.custom_fields, profile.custom_fields, actor=user.id)
     if "registration_no" in sent:
         profile.registration_no, profile.reg_norm = body.registration_no, svc.norm_reg(body.registration_no)
     if profile.verification_status != "verified" and sent & {"registration_no", "full_name", "graduation_year", "date_of_birth"}:

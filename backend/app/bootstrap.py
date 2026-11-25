@@ -8,7 +8,7 @@ Safe to run concurrently from several API replicas (PostgreSQL advisory lock).
 import asyncio
 import logging
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -82,8 +82,7 @@ async def sync(db: AsyncSession) -> dict:
     have_tpl = {(t.key, t.channel, t.language) for t in (await db.execute(select(MessageTemplate))).scalars()}
     for key, channel, name, subject, body, ph in DEFAULT_TEMPLATES:
         if (key, channel, "en") not in have_tpl:
-            db.add(MessageTemplate(key=key, channel=channel, language="en", name=name, subject=subject, body=body,
-                                   placeholders=ph))
+            db.add(MessageTemplate(key=key, channel=channel, language="en", name=name, subject=subject, body=body, placeholders=ph))
 
     # job categories (first start only; admins manage them afterwards)
     from .models import JobCategory
@@ -92,6 +91,25 @@ async def sync(db: AsyncSession) -> dict:
     if not (await db.execute(select(JobCategory.id).limit(1))).first():
         for i, name in enumerate(DEFAULT_CATEGORIES):
             db.add(JobCategory(name=name, position=i))
+
+    # languages (English and Urdu) and a starter About page for the website (first start only)
+    from .models import CmsPage
+    from .modules.administration.localization import ensure_languages
+    from .modules.cms.seed import ABOUT_PAGE
+
+    await ensure_languages(db)
+    if not (await db.execute(select(CmsPage.id).limit(1))).first():
+        db.add(
+            CmsPage(
+                slug="about",
+                title=ABOUT_PAGE["title"],
+                status="published",
+                draft=ABOUT_PAGE,
+                published=ABOUT_PAGE,
+                has_unpublished_changes=False,
+                published_at=func.now(),
+            )
+        )
 
     # branding
     if not await db.get(BrandingSetting, 1):

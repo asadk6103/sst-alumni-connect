@@ -18,7 +18,7 @@ from ...core.errors import AppError, conflict, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...models import AlumniProfile, Batch, Event, EventAttendance, EventFeedback, EventMedia, EventRegistration, User
-from ...services import live, media, messaging, notifications
+from ...services import custom_fields, live, media, messaging, notifications
 from ..community.service import authors
 from . import service as svc
 
@@ -238,6 +238,7 @@ class EventIn(BaseModel):
     max_guests: int = Field(0, ge=0, le=10)
     registration_deadline: datetime | None = None
     batch_id: uuid.UUID | None = None
+    custom_fields: dict = Field(default_factory=dict)
 
     @field_validator("online_url")
     @classmethod
@@ -323,7 +324,13 @@ async def _check_refs(db: AsyncSession, body: EventIn) -> None:
 @admin.post("", status_code=201, summary="Create an event (draft)")
 async def create(body: EventIn, request: Request, me: Principal = Depends(require("events.create")), db: AsyncSession = Depends(get_db)):
     await _check_refs(db, body)
-    ev = Event(**body.model_dump(), status="draft", created_by=me.id, registered_count=0)
+    ev = Event(
+        **body.model_dump(exclude={"custom_fields"}),
+        status="draft",
+        created_by=me.id,
+        registered_count=0,
+        custom_fields=await custom_fields.clean(db, "event", body.custom_fields, actor=me.id),
+    )
     db.add(ev)
     await db.flush()
     await record(
@@ -350,8 +357,9 @@ async def update(
             [{"field": "capacity", "message": f"At least {ev.registered_count}."}],
         )
     moved = body.starts_at != ev.starts_at
-    for k, v in body.model_dump().items():
+    for k, v in body.model_dump(exclude={"custom_fields"}).items():
         setattr(ev, k, v)
+    ev.custom_fields = await custom_fields.clean(db, "event", body.custom_fields, ev.custom_fields, actor=me.id)
     if moved:
         ev.reminder_sent_at = None
     await db.flush()
@@ -401,8 +409,14 @@ async def cancel_event(
     ).all()
     for _reg, u in regs:
         await notifications.notify(
-            db, u.id, "events", "cancelled", f"Cancelled: {ev.title}", body=body.reason, link="/portal/events",
-            email=("events.cancelled", { "event": ev.title, "reason": body.reason, "link": f"{general.app_url}/portal/events"}),
+            db,
+            u.id,
+            "events",
+            "cancelled",
+            f"Cancelled: {ev.title}",
+            body=body.reason,
+            link="/portal/events",
+            email=("events.cancelled", {"event": ev.title, "reason": body.reason, "link": f"{general.app_url}/portal/events"}),
         )
     await record(
         db,
@@ -649,14 +663,21 @@ async def send_reminders(db: AsyncSession) -> int:
         )
         for u in regs:
             await notifications.notify(
-                db, u.id, "events", "reminder", f"Tomorrow: {ev.title}", link=f"/portal/events/{ev.id}",
-                email=("events.reminder", {
-                    
-                    "event": ev.title,
-                    "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
-                    "where": "Online — the link is on the event page" if ev.is_online else (ev.venue or ""),
-                    "link": f"{general.app_url}/portal/events/{ev.id}",
-                }),
+                db,
+                u.id,
+                "events",
+                "reminder",
+                f"Tomorrow: {ev.title}",
+                link=f"/portal/events/{ev.id}",
+                email=(
+                    "events.reminder",
+                    {
+                        "event": ev.title,
+                        "when": ev.starts_at.strftime("%d %b %Y %H:%M UTC"),
+                        "where": "Online — the link is on the event page" if ev.is_online else (ev.venue or ""),
+                        "link": f"{general.app_url}/portal/events/{ev.id}",
+                    },
+                ),
             )
             sent += 1
         ev.reminder_sent_at = now

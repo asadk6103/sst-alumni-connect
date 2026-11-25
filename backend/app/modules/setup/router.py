@@ -40,8 +40,7 @@ async def _guard(db: AsyncSession, request: Request, code: str) -> None:
         raise AppError(409, "INSTALLED", "Installation is already complete.")
     await enforce(f"setup:{client_ip(request)}", 30, 600)
     if not secrets.check_setup_code(code):
-        raise AppError(403, "INVALID_SETUP_CODE",
-                       "The setup code is not correct. It is printed in the API log (docker compose logs api).")
+        raise AppError(403, "INVALID_SETUP_CODE", "The setup code is not correct. It is printed in the API log (docker compose logs api).")
 
 
 class CodeIn(BaseModel):
@@ -65,8 +64,12 @@ async def status(db: AsyncSession = Depends(get_db)):
         checks["redis"] = {"ok": True, "message": "Redis connected."}
     except Exception as e:
         checks["redis"] = {"ok": False, "message": f"Redis not reachable ({type(e).__name__})."}
-    out.update(checks=checks, bundled_storage=bool(integrations.bundled_minio_defaults()),
-               environment=infra().environment, mail_catcher=infra().is_dev)
+    out.update(
+        checks=checks,
+        bundled_storage=bool(integrations.bundled_minio_defaults()),
+        environment=infra().environment,
+        mail_catcher=infra().is_dev,
+    )
     return {"data": out}
 
 
@@ -77,8 +80,7 @@ async def verify_code(body: CodeIn, request: Request, db: AsyncSession = Depends
 
 
 @router.post("/upload", summary="Upload a logo or image during setup")
-async def upload(request: Request, code: str = Form(...), file: UploadFile = File(...),
-                 db: AsyncSession = Depends(get_db)):
+async def upload(request: Request, code: str = Form(...), file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     await _guard(db, request, code)
     data = await file.read()
     m = await media.upload(db, data=data, filename=file.filename or "logo", folder="branding", images_only=True)
@@ -98,8 +100,14 @@ async def test_email(body: SmtpTestIn, request: Request, db: AsyncSession = Depe
     cfg, sec = body.config.model_dump(mode="json"), {"password": body.password or ""}
     try:
         if body.send_to:
-            await asyncio.to_thread(messaging.smtp_send, cfg, sec, body.send_to, "Test email from the SST Alumni Connect setup",
-                                    "<p>Your email settings work.</p>")
+            await asyncio.to_thread(
+                messaging.smtp_send,
+                cfg,
+                sec,
+                body.send_to,
+                "Test email from the SST Alumni Connect setup",
+                "<p>Your email settings work.</p>",
+            )
             return {"data": {"ok": True, "message": f"Test email sent to {body.send_to}."}}
         return {"data": {"ok": True, "message": await asyncio.to_thread(messaging.smtp_check, cfg, sec)}}
     except messaging.DeliveryError as e:
@@ -194,15 +202,19 @@ async def complete(body: CompleteIn, request: Request, response: Response, db: A
     await _guard(db, request, body.code)
     # Serialise concurrent completion attempts.
     await db.execute(text("SELECT pg_advisory_xact_lock(7312005)"))
-    if (await db.get(SystemSetting, "installation")):
+    if await db.get(SystemSetting, "installation"):
         raise AppError(409, "INSTALLED", "Installation is already complete.")
 
     general = GeneralSettings(**body.institution.model_dump())
     security = SecuritySettings(**body.security.model_dump())
     problems = password_problems(body.admin.password, security)
     if problems:
-        raise AppError(422, "WEAK_PASSWORD", "Password must contain " + ", ".join(problems) + ".",
-                       [{"field": "admin.password", "message": "Password must contain " + ", ".join(problems) + "."}])
+        raise AppError(
+            422,
+            "WEAK_PASSWORD",
+            "Password must contain " + ", ".join(problems) + ".",
+            [{"field": "admin.password", "message": "Password must contain " + ", ".join(problems) + "."}],
+        )
     if (await db.execute(select(func.count()).select_from(User))).scalar_one():
         raise AppError(409, "USERS_EXIST", "Accounts already exist; use the administration portal instead.")
     await settings_store.save_group(db, "general", general, None)
@@ -218,27 +230,47 @@ async def complete(body: CompleteIn, request: Request, response: Response, db: A
         db.add(BrandingSetting(id=1, draft=brand, published=brand, version=1, published_at=datetime.now(UTC)))
 
     if body.email:
-        await integrations.save(db, "email", integrations.IntegrationUpdate(
-            provider="smtp", config=body.email.config.model_dump(mode="json"),
-            secrets={"password": body.email.password} if body.email.password else {}, enabled=True), None)
+        await integrations.save(
+            db,
+            "email",
+            integrations.IntegrationUpdate(
+                provider="smtp",
+                config=body.email.config.model_dump(mode="json"),
+                secrets={"password": body.email.password} if body.email.password else {},
+                enabled=True,
+            ),
+            None,
+        )
     if body.storage.provider != "local":
         sec = {}
         if body.storage.access_key:
             sec = {"access_key": body.storage.access_key, "secret_key": body.storage.secret_key or ""}
-        await integrations.save(db, "storage", integrations.IntegrationUpdate(
-            provider=body.storage.provider, config=body.storage.config, secrets=sec, enabled=True), None)
+        await integrations.save(
+            db,
+            "storage",
+            integrations.IntegrationUpdate(provider=body.storage.provider, config=body.storage.config, secrets=sec, enabled=True),
+            None,
+        )
 
     role = (await db.execute(select(Role).where(Role.key == SUPER_ADMIN))).scalar_one()
     now = datetime.now(UTC)
-    user = User(email=body.admin.email.lower(), full_name=body.admin.full_name.strip(),
-                password_hash=hash_password(body.admin.password), status="active", email_verified_at=now,
-                password_changed_at=now, roles=[role])
+    user = User(
+        email=body.admin.email.lower(),
+        full_name=body.admin.full_name.strip(),
+        password_hash=hash_password(body.admin.password),
+        status="active",
+        email_verified_at=now,
+        password_changed_at=now,
+        roles=[role],
+    )
     db.add(user)
-    db.add(SystemSetting(key="installation", value={"completed_at": now.isoformat(), "version": VERSION,
-                                                    "completed_by": body.admin.email.lower()}))
+    db.add(
+        SystemSetting(
+            key="installation", value={"completed_at": now.isoformat(), "version": VERSION, "completed_by": body.admin.email.lower()}
+        )
+    )
     await db.flush()
-    await record(db, actor_id=user.id, action="install", entity="system", summary="Installation completed",
-                 ip=client_ip(request))
+    await record(db, actor_id=user.id, action="install", entity="system", summary="Installation completed", ip=client_ip(request))
     tokens = await issue_session(db, request, response, user)
     await settings_store.changed()
     secrets.clear_setup_code()
@@ -255,5 +287,10 @@ async def announce() -> None:
             return
     code = secrets.ensure_setup_code()
     line = "=" * 64
-    log.warning("\n%s\n  SST Alumni Connect — first-run setup\n  Open the site and enter this setup code:\n\n"
-                "      %s\n\n  (shown until installation is complete)\n%s", line, code, line)
+    log.warning(
+        "\n%s\n  SST Alumni Connect — first-run setup\n  Open the site and enter this setup code:\n\n"
+        "      %s\n\n  (shown until installation is complete)\n%s",
+        line,
+        code,
+        line,
+    )

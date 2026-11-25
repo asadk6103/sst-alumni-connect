@@ -80,46 +80,114 @@ def _admin(*modules: str, actions: tuple[str, ...] | None = None) -> set[str]:
 
 ALL_KEYS = {k for k, *_ in all_permissions()}
 ADMIN_KEYS = {k for k in ALL_KEYS if not k.startswith("portal.")}
-MEMBER_BASE = {"portal.access", "portal.directory", "portal.connect", "portal.post", "portal.react",
-               "portal.message", "portal.groups", "portal.jobs.view", "portal.events.register", "portal.donate"}
+MEMBER_BASE = {
+    "portal.access",
+    "portal.directory",
+    "portal.connect",
+    "portal.post",
+    "portal.react",
+    "portal.message",
+    "portal.groups",
+    "portal.jobs.view",
+    "portal.events.register",
+    "portal.donate",
+}
 CONTENT = ("news", "gallery", "cms", "media", "achievements", "navigation")
 
 # key: (name, description, is_staff, default permissions)
 DEFAULT_ROLES: dict[str, tuple[str, str, bool, set[str]]] = {
     "super_admin": ("Super Administrator", "Unrestricted access to everything.", True, ALL_KEYS),
-    "system_admin": ("System Administrator", "Configuration, integrations, users and system health.", True,
-                     _admin("dashboard", "users", "roles", "settings", "branding", "integrations", "modules",
-                            "custom_fields", "feature_flags", "audit", "health", "navigation", "media")),
-    "alumni_admin": ("Alumni Administrator", "Manages alumni records, verification, batches and community.", True,
-                     _admin("dashboard", "alumni", "verification", "batches", "community", "achievements",
-                            "reports", "communications") | _admin("media", actions=("view", "create"))),
-    "alumni_coordinator": ("Alumni Coordinator", "Day-to-day alumni engagement and verification.", True,
-                           _admin("dashboard", actions=("view",)) | _admin("alumni", actions=("view", "edit"))
-                           | _admin("verification", "batches", "achievements")
-                           | _admin("community", actions=("view", "approve", "reject"))),
-    "content_editor": ("Content Editor", "Website pages, news, gallery and media.", True,
-                       _admin("dashboard", actions=("view",)) | _admin(*CONTENT)),
-    "event_manager": ("Event Manager", "Events, reunions, registrations and attendance.", True,
-                      _admin("dashboard", actions=("view",)) | _admin("events", "gallery", "media")),
-    "career_manager": ("Career Manager", "Jobs, internships and employers.", True,
-                       _admin("dashboard", actions=("view",)) | _admin("jobs")),
-    "mentorship_coordinator": ("Mentorship Coordinator", "Mentor approvals and mentorship programme.", True,
-                               _admin("dashboard", actions=("view",)) | _admin("mentorship")),
-    "finance_manager": ("Finance / Donation Manager", "Campaigns, donations and scholarships.", True,
-                        _admin("dashboard", actions=("view",)) | _admin("donations", "scholarships")
-                        | _admin("reports", actions=("view", "export"))),
-    "chapter_head": ("Alumni Chapter Head", "Leads a regional alumni chapter.", False,
-                     MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request",
-                                    "portal.mentorship.mentor", "portal.nominate"}),
-    "verified_alumni": ("Verified Alumni", "Verified former student of SST.", False,
-                        MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request",
-                                       "portal.mentorship.mentor", "portal.nominate"}),
-    "unverified_alumni": ("Unverified Alumni", "Registered; awaiting verification.", False,
-                          {"portal.access", "portal.jobs.view", "portal.events.register", "portal.donate"}),
-    "student": ("Student", "Current SST student (mentorship and events).", False,
-                {"portal.access", "portal.mentorship.request", "portal.events.register", "portal.jobs.view"}),
-    "employer": ("Employer", "Organisation posting jobs and internships.", False,
-                 {"portal.access", "portal.jobs.view", "portal.jobs.post"}),
+    "system_admin": (
+        "System Administrator",
+        "Configuration, integrations, users and system health.",
+        True,
+        _admin(
+            "dashboard",
+            "users",
+            "roles",
+            "settings",
+            "branding",
+            "integrations",
+            "modules",
+            "custom_fields",
+            "feature_flags",
+            "audit",
+            "health",
+            "navigation",
+            "media",
+        ),
+    ),
+    "alumni_admin": (
+        "Alumni Administrator",
+        "Manages alumni records, verification, batches and community.",
+        True,
+        _admin("dashboard", "alumni", "verification", "batches", "community", "achievements", "reports", "communications")
+        | _admin("media", actions=("view", "create")),
+    ),
+    "alumni_coordinator": (
+        "Alumni Coordinator",
+        "Day-to-day alumni engagement and verification.",
+        True,
+        _admin("dashboard", actions=("view",))
+        | _admin("alumni", actions=("view", "edit"))
+        | _admin("verification", "batches", "achievements")
+        | _admin("community", actions=("view", "approve", "reject")),
+    ),
+    "content_editor": (
+        "Content Editor",
+        "Website pages, news, gallery and media.",
+        True,
+        _admin("dashboard", actions=("view",)) | _admin(*CONTENT),
+    ),
+    "event_manager": (
+        "Event Manager",
+        "Events, reunions, registrations and attendance.",
+        True,
+        _admin("dashboard", actions=("view",)) | _admin("events", "gallery", "media"),
+    ),
+    "career_manager": ("Career Manager", "Jobs, internships and employers.", True, _admin("dashboard", actions=("view",)) | _admin("jobs")),
+    "mentorship_coordinator": (
+        "Mentorship Coordinator",
+        "Mentor approvals and mentorship programme.",
+        True,
+        _admin("dashboard", actions=("view",)) | _admin("mentorship"),
+    ),
+    "finance_manager": (
+        "Finance / Donation Manager",
+        "Campaigns, donations and scholarships.",
+        True,
+        _admin("dashboard", actions=("view",)) | _admin("donations", "scholarships") | _admin("reports", actions=("view", "export")),
+    ),
+    "chapter_head": (
+        "Alumni Chapter Head",
+        "Leads a regional alumni chapter.",
+        False,
+        MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request", "portal.mentorship.mentor", "portal.nominate"},
+    ),
+    "verified_alumni": (
+        "Verified Alumni",
+        "Verified former student of SST.",
+        False,
+        MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request", "portal.mentorship.mentor", "portal.nominate"},
+    ),
+    "unverified_alumni": (
+        "Unverified Alumni",
+        "Registered; awaiting verification.",
+        False,
+        {"portal.access", "portal.jobs.view", "portal.events.register", "portal.donate"},
+    ),
+    "student": (
+        "Student",
+        "Current SST student (mentorship and events).",
+        False,
+        {"portal.access", "portal.mentorship.request", "portal.events.register", "portal.jobs.view"},
+    ),
+    "employer": (
+        "Employer",
+        "Organisation posting jobs and internships.",
+        False,
+        {"portal.access", "portal.jobs.view", "portal.jobs.post"},
+    ),
     "guest": ("Guest", "Limited access.", False, {"portal.access"}),
 }
 

@@ -36,10 +36,14 @@ class GenerateIn(BaseModel):
 async def _counts(db: AsyncSession, ids: list[uuid.UUID]) -> dict:
     if not ids:
         return {}
-    rows = (await db.execute(select(AlumniProfile.batch_id, AlumniProfile.verification_status, func.count())
-                             .join(User, User.id == AlumniProfile.user_id)
-                             .where(AlumniProfile.batch_id.in_(ids), User.deleted_at.is_(None))
-                             .group_by(AlumniProfile.batch_id, AlumniProfile.verification_status))).all()
+    rows = (
+        await db.execute(
+            select(AlumniProfile.batch_id, AlumniProfile.verification_status, func.count())
+            .join(User, User.id == AlumniProfile.user_id)
+            .where(AlumniProfile.batch_id.in_(ids), User.deleted_at.is_(None))
+            .group_by(AlumniProfile.batch_id, AlumniProfile.verification_status)
+        )
+    ).all()
     out: dict = {}
     for bid, status, n in rows:
         c = out.setdefault(bid, {"members": 0, "verified": 0, "pending": 0})
@@ -52,22 +56,36 @@ async def _counts(db: AsyncSession, ids: list[uuid.UUID]) -> dict:
 async def _out(db: AsyncSession, b: Batch, counts: dict | None = None) -> dict:
     c = (counts or await _counts(db, [b.id])).get(b.id, {"members": 0, "verified": 0, "pending": 0})
     coord = await db.get(User, b.coordinator_id) if b.coordinator_id else None
-    return {"id": str(b.id), "name": b.name, "graduation_year": b.graduation_year, "admission_year": b.admission_year,
-            "description": b.description, "is_active": b.is_active,
-            "coordinator": {"id": str(coord.id), "full_name": coord.full_name, "email": coord.email} if coord else None,
-            **c, "created_at": b.created_at}
+    return {
+        "id": str(b.id),
+        "name": b.name,
+        "graduation_year": b.graduation_year,
+        "admission_year": b.admission_year,
+        "description": b.description,
+        "is_active": b.is_active,
+        "coordinator": {"id": str(coord.id), "full_name": coord.full_name, "email": coord.email} if coord else None,
+        **c,
+        "created_at": b.created_at,
+    }
 
 
 @router.get("", summary="List batches with member counts")
-async def list_batches(q: str | None = Query(None, max_length=100), _: Principal = Depends(require("batches.view")),
-                       db: AsyncSession = Depends(get_db)):
+async def list_batches(
+    q: str | None = Query(None, max_length=100), _: Principal = Depends(require("batches.view")), db: AsyncSession = Depends(get_db)
+):
     stmt = select(Batch).order_by(Batch.graduation_year.desc(), Batch.name)
     if q:
         stmt = stmt.where(func.lower(Batch.name).like(f"%{q.strip().lower()}%"))
     rows = (await db.execute(stmt)).scalars().all()
     counts = await _counts(db, [b.id for b in rows])
-    unassigned = (await db.execute(select(func.count()).select_from(AlumniProfile).join(User, User.id == AlumniProfile.user_id)
-                                   .where(AlumniProfile.batch_id.is_(None), User.deleted_at.is_(None)))).scalar_one()
+    unassigned = (
+        await db.execute(
+            select(func.count())
+            .select_from(AlumniProfile)
+            .join(User, User.id == AlumniProfile.user_id)
+            .where(AlumniProfile.batch_id.is_(None), User.deleted_at.is_(None))
+        )
+    ).scalar_one()
     return {"data": [await _out(db, b, counts) for b in rows], "meta": {"unassigned": unassigned}}
 
 
@@ -84,21 +102,24 @@ async def _check(db: AsyncSession, body: BatchIn, current: uuid.UUID | None = No
 
 
 @router.post("", status_code=201, summary="Create a batch")
-async def create_batch(body: BatchIn, request: Request, me: Principal = Depends(require("batches.create")),
-                       db: AsyncSession = Depends(get_db)):
+async def create_batch(
+    body: BatchIn, request: Request, me: Principal = Depends(require("batches.create")), db: AsyncSession = Depends(get_db)
+):
     await _check(db, body)
     b = Batch(**{**body.model_dump(), "name": body.name.strip()})
     db.add(b)
     await db.flush()
     await settings_store.changed()
-    await record(db, actor_id=me.id, action="create", entity="batch", entity_id=b.id, summary=f"Created batch {b.name}",
-                 ip=client_ip(request))
+    await record(
+        db, actor_id=me.id, action="create", entity="batch", entity_id=b.id, summary=f"Created batch {b.name}", ip=client_ip(request)
+    )
     return {"data": await _out(db, b)}
 
 
 @router.post("/generate", status_code=201, summary="Create one batch per graduation year in a range")
-async def generate(body: GenerateIn, request: Request, me: Principal = Depends(require("batches.create")),
-                   db: AsyncSession = Depends(get_db)):
+async def generate(
+    body: GenerateIn, request: Request, me: Principal = Depends(require("batches.create")), db: AsyncSession = Depends(get_db)
+):
     if body.to_year < body.from_year or body.to_year - body.from_year > 100:
         fail("to_year", "Choose a range of at most 100 years, oldest first.")
     if "{year}" not in body.pattern:
@@ -115,17 +136,31 @@ async def generate(body: GenerateIn, request: Request, me: Principal = Depends(r
     for y in range(body.from_year, body.to_year + 1):
         ids = (await db.execute(select(Batch.id).where(Batch.graduation_year == y))).scalars().all()
         if len(ids) == 1:
-            await db.execute(AlumniProfile.__table__.update().where(
-                AlumniProfile.graduation_year == y, AlumniProfile.batch_id.is_(None)).values(batch_id=ids[0]))
+            await db.execute(
+                AlumniProfile.__table__.update()
+                .where(AlumniProfile.graduation_year == y, AlumniProfile.batch_id.is_(None))
+                .values(batch_id=ids[0])
+            )
     await settings_store.changed()
-    await record(db, actor_id=me.id, action="create", entity="batch",
-                 summary=f"Created {len(created)} batches ({body.from_year}–{body.to_year})", ip=client_ip(request))
+    await record(
+        db,
+        actor_id=me.id,
+        action="create",
+        entity="batch",
+        summary=f"Created {len(created)} batches ({body.from_year}–{body.to_year})",
+        ip=client_ip(request),
+    )
     return {"data": {"created": created}}
 
 
 @router.put("/{batch_id}", summary="Update a batch")
-async def update_batch(batch_id: uuid.UUID, body: BatchIn, request: Request, me: Principal = Depends(require("batches.edit")),
-                       db: AsyncSession = Depends(get_db)):
+async def update_batch(
+    batch_id: uuid.UUID,
+    body: BatchIn,
+    request: Request,
+    me: Principal = Depends(require("batches.edit")),
+    db: AsyncSession = Depends(get_db),
+):
     b = await db.get(Batch, batch_id)
     if not b:
         raise not_found("Batch")
@@ -137,19 +172,22 @@ async def update_batch(batch_id: uuid.UUID, body: BatchIn, request: Request, me:
     for k, v in body.model_dump().items():
         setattr(b, k, v.strip() if isinstance(v, str) else v)
     await settings_store.changed()
-    await record(db, actor_id=me.id, action="update", entity="batch", entity_id=b.id, summary=f"Updated batch {b.name}",
-                 ip=client_ip(request))
+    await record(
+        db, actor_id=me.id, action="update", entity="batch", entity_id=b.id, summary=f"Updated batch {b.name}", ip=client_ip(request)
+    )
     return {"data": await _out(db, b)}
 
 
 @router.delete("/{batch_id}", summary="Delete a batch (members keep their graduation year)")
-async def delete_batch(batch_id: uuid.UUID, request: Request, me: Principal = Depends(require("batches.delete")),
-                       db: AsyncSession = Depends(get_db)):
+async def delete_batch(
+    batch_id: uuid.UUID, request: Request, me: Principal = Depends(require("batches.delete")), db: AsyncSession = Depends(get_db)
+):
     b = await db.get(Batch, batch_id)
     if not b:
         raise not_found("Batch")
     await db.delete(b)
     await settings_store.changed()
-    await record(db, actor_id=me.id, action="delete", entity="batch", entity_id=batch_id, summary=f"Deleted batch {b.name}",
-                 ip=client_ip(request))
+    await record(
+        db, actor_id=me.id, action="delete", entity="batch", entity_id=batch_id, summary=f"Deleted batch {b.name}", ip=client_ip(request)
+    )
     return {"data": {"ok": True}}

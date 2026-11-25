@@ -58,16 +58,29 @@ async def health(_: Principal = Depends(require("health.view")), db: AsyncSessio
         lengths = await asyncio.gather(r.llen("default"), r.llen("notifications"))
         return f"{sum(lengths)} task(s) waiting"
 
-    checks = {"database": await _timed(database()), "redis": await _timed(cache()), "storage": await _timed(files()),
-              "queue": await _timed(queue())}
+    checks = {
+        "database": await _timed(database()),
+        "redis": await _timed(cache()),
+        "storage": await _timed(files()),
+        "queue": await _timed(queue()),
+    }
     pool = engine.pool
     stats = {
         "users": (await db.execute(select(func.count()).select_from(User).where(User.deleted_at.is_(None)))).scalar_one(),
-        "deliveries_failed_24h": (await db.execute(select(func.count()).select_from(NotificationLog).where(
-            NotificationLog.status == "failed", NotificationLog.created_at > func.now() - text("interval '24 hours'")
-        ))).scalar_one(),
-        "db_pool": {"size": pool.size(), "checked_out": pool.checkedout(), "overflow": pool.overflow()}
-        if hasattr(pool, "size") else None,
+        "deliveries_failed_24h": (
+            await db.execute(
+                select(func.count())
+                .select_from(NotificationLog)
+                .where(NotificationLog.status == "failed", NotificationLog.created_at > func.now() - text("interval '24 hours'"))
+            )
+        ).scalar_one(),
+        "db_pool": {"size": pool.size(), "checked_out": pool.checkedout(), "overflow": pool.overflow()} if hasattr(pool, "size") else None,
     }
-    return {"data": {"checks": checks, "stats": stats, "latency": latency_summary(),
-                     "note": "Latency covers recent requests handled by this API instance."}}
+    return {
+        "data": {
+            "checks": checks,
+            "stats": stats,
+            "latency": latency_summary(),
+            "note": "Latency covers recent requests handled by this API instance.",
+        }
+    }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Bell, Blocks, HandHeart, Building2, GraduationCap, LayoutDashboard, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
+import { ArrowDown, ArrowUp, Bell, Globe, Languages, Blocks, HandHeart, Building2, GraduationCap, LayoutDashboard, CheckCircle2, CreditCard, Flag, HardDrive, ImagePlus, Mail, MessageSquare, Palette, RadioTower,
   RotateCcw, Save, Send, Shield, Upload, Users, XCircle } from 'lucide-react';
 import { api, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, Badge, Card, CardHeader, PageHeader, Skeleton, StatTile } from '@/components/ui/display';
 import { ColorInput, Field, Input, PasswordInput, Select, Switch, Textarea } from '@/components/ui/form';
 import { useConfirm } from '@/components/ui/overlay';
+import { WebsiteSettingsPanel } from './Website';
+import { LocalizationPanel } from './Administration';
 
 const SECTIONS = [
   { key: 'general', label: 'General', icon: Building2, perm: 'settings.view' },
@@ -20,6 +22,8 @@ const SECTIONS = [
   { key: 'alumni', label: 'Alumni & registration', icon: GraduationCap, perm: 'settings.view' },
   { key: 'dashboard', label: 'Dashboard widgets', icon: LayoutDashboard, perm: 'settings.view' },
   { key: 'donations', label: 'Donations', icon: HandHeart, perm: 'donations.view' },
+  { key: 'website', label: 'Public website', icon: Globe, perm: 'cms.view' },
+  { key: 'languages', label: 'Languages & translations', icon: Languages, perm: 'settings.view' },
   { key: 'realtime', label: 'Real-time & messaging', icon: RadioTower, perm: 'settings.view' },
   { key: 'modules', label: 'Modules', icon: Blocks, perm: 'modules.view' },
   { key: 'flags', label: 'Feature flags', icon: Flag, perm: 'feature_flags.view' },
@@ -55,6 +59,8 @@ export function ConfigurationPage() {
             : section === 'alumni' ? <SettingsGroup group="alumni" />
             : section === 'dashboard' ? <DashboardWidgets />
             : section === 'donations' ? <SettingsGroup group="donations" />
+            : section === 'website' ? <WebsiteSettingsPanel />
+            : section === 'languages' ? <LocalizationPanel />
             : section === 'branding' ? <BrandingEditor />
             : section === 'modules' ? <ModulesPanel />
             : section === 'flags' ? <FlagsPanel />

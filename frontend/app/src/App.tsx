@@ -68,6 +68,18 @@ const EventsAdminPage = lazy(() => eng().then((m) => ({ default: m.EventsAdminPa
 const JobsAdminPage = lazy(() => eng().then((m) => ({ default: m.JobsAdminPage })));
 const MentorshipAdminPage = lazy(() => eng().then((m) => ({ default: m.MentorshipAdminPage })));
 const AchievementsAdminPage = lazy(() => eng().then((m) => ({ default: m.AchievementsAdminPage })));
+const web = () => import('@/pages/admin/Website');
+const PagesAdminPage = lazy(() => web().then((m) => ({ default: m.PagesAdminPage })));
+const PageEditorPage = lazy(() => web().then((m) => ({ default: m.PageEditorPage })));
+const NewsAdminPage = lazy(() => web().then((m) => ({ default: m.NewsAdminPage })));
+const NavigationAdminPage = lazy(() => web().then((m) => ({ default: m.NavigationAdminPage })));
+const MessagesAdminPage = lazy(() => web().then((m) => ({ default: m.MessagesAdminPage })));
+const adm = () => import('@/pages/admin/Administration');
+const CustomFieldsAdminPage = lazy(() => adm().then((m) => ({ default: m.CustomFieldsAdminPage })));
+const ReportsPage = lazy(() => adm().then((m) => ({ default: m.ReportsPage })));
+const newsp = () => import('@/pages/portal/News');
+const NewsPage = lazy(() => newsp().then((m) => ({ default: m.NewsPage })));
+const ArticlePage = lazy(() => newsp().then((m) => ({ default: m.ArticlePage })));
 
 function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean }) {
   const { user, ready } = useAuth();
@@ -118,6 +130,13 @@ export function App() {
         <Route path="donations/:tab?" element={<RequirePerm perms={perm('/admin/donations')}><DonationsAdminPage /></RequirePerm>} />
         <Route path="newsletters" element={<RequirePerm perms={perm('/admin/newsletters')}><NewslettersAdminPage /></RequirePerm>} />
         <Route path="gallery" element={<RequirePerm perms={perm('/admin/gallery')}><GalleryAdminPage /></RequirePerm>} />
+        <Route path="pages" element={<RequirePerm perms={perm('/admin/pages')}><PagesAdminPage /></RequirePerm>} />
+        <Route path="pages/:id" element={<RequirePerm perms={perm('/admin/pages')}><PageEditorPage /></RequirePerm>} />
+        <Route path="navigation" element={<RequirePerm perms={['navigation.view']}><NavigationAdminPage /></RequirePerm>} />
+        <Route path="news" element={<RequirePerm perms={perm('/admin/news')}><NewsAdminPage /></RequirePerm>} />
+        <Route path="website/messages" element={<RequirePerm perms={perm('/admin/website/messages')}><MessagesAdminPage /></RequirePerm>} />
+        <Route path="custom-fields" element={<RequirePerm perms={perm('/admin/custom-fields')}><CustomFieldsAdminPage /></RequirePerm>} />
+        <Route path="reports/:key?" element={<RequirePerm perms={perm('/admin/reports')}><ReportsPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />
@@ -157,6 +176,8 @@ export function App() {
         <Route path="gallery" element={<Lazy><GalleryPage /></Lazy>} />
         <Route path="gallery/:id" element={<Lazy><AlbumPage /></Lazy>} />
         <Route path="notifications" element={<Lazy><NotificationsPage /></Lazy>} />
+        <Route path="news" element={<Lazy><NewsPage /></Lazy>} />
+        <Route path="news/:slug" element={<Lazy><ArticlePage /></Lazy>} />
         <Route path="account/:section?" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

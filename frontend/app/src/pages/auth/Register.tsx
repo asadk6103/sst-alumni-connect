@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/display';
 import { Checkbox, Field, Input, PasswordInput, Select } from '@/components/ui/form';
 import { PasswordChecklist, passwordRules } from './pages';
+import { useT } from '@/lib/i18n';
+import { CustomFieldsForm, customErrors, useCustomFields, type CustomValues } from '@/components/customFields';
 
 const STEPS = [
   { key: 'account', label: 'Account' },
@@ -31,6 +33,9 @@ type Form = {
 
 export function RegisterPage() {
   const site = useSite();
+  const t = useT();
+  const extraDefs = useCustomFields('alumni_profile', { registration: true });
+  const [extra, setExtra] = useState<CustomValues>({});
   const policy = useQuery({ queryKey: ['public-batches'], queryFn: () => api<{ data: PublicBatch[]; meta: RegistrationPolicy }>('/api/v1/public/batches', { auth: false }) });
   const [step, setStep] = useState(0);
   const [f, setF] = useState<Form>({
@@ -74,7 +79,7 @@ export function RegisterPage() {
           admission_year: num(f.admission_year), graduation_year: num(f.graduation_year), batch_id: f.batch_id || null,
           class_name: opt(f.class_name), registration_no: opt(f.registration_no), gender: f.gender || null,
           date_of_birth: f.date_of_birth || null, city: opt(f.city), country: opt(f.country), designation: opt(f.designation),
-          organization: opt(f.organization), accept_terms: f.accept_terms,
+          organization: opt(f.organization), accept_terms: f.accept_terms, custom_fields: extra,
         },
       });
       setDone(r.data.message);
@@ -84,6 +89,7 @@ export function RegisterPage() {
         setErrors(fields);
         const first = Object.keys(fields)[0];
         if (first && FIELD_STEP[first] !== undefined) setStep(FIELD_STEP[first]!);
+        else if (first?.startsWith('custom_fields.')) setStep(2);
         setError(err.message);
       } else setError('Something went wrong. Please try again.');
     } finally {
@@ -112,8 +118,8 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthLayout wide title="Join the alumni network" subtitle={`Create your account to reconnect with the ${site.institution_name} community.`}
-      footer={<>Already registered? <Link to="/login" className="font-medium text-primary hover:underline">Sign in</Link></>}>
+    <AuthLayout wide title={t('auth.register_title', 'Join the alumni network')} subtitle={`Create your account to reconnect with the ${site.institution_name} community.`}
+      footer={<>{t('auth.have_account', 'Already registered?')} <Link to="/login" className="font-medium text-primary hover:underline">{t('auth.sign_in', 'Sign in')}</Link></>}>
       <ol className="mb-6 flex items-center gap-2" aria-label="Registration steps">
         {STEPS.map((s, i) => (
           <li key={s.key} className="flex flex-1 items-center gap-2">
@@ -206,6 +212,11 @@ export function RegisterPage() {
             <Field label="Current organisation" error={errors.organization}>
               {(id) => <Input id={id} autoComplete="organization" value={f.organization} onChange={(e) => set('organization', e.target.value)} />}
             </Field>
+            {!!extraDefs.data?.length && (
+              <div className="border-t border-line pt-4 sm:col-span-2">
+                <CustomFieldsForm defs={extraDefs.data} value={extra} onChange={setExtra} errors={customErrors(errors)} />
+              </div>
+            )}
             <div className="sm:col-span-2">
               <Checkbox checked={f.accept_terms} onCheckedChange={(v) => set('accept_terms', v)}
                 label={<>I confirm these details are correct and accept the {p?.terms_url

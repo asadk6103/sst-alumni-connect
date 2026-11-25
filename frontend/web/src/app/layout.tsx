@@ -4,6 +4,7 @@ import '@fontsource/poppins/500.css';
 import '@fontsource/poppins/600.css';
 import '@fontsource/poppins/700.css';
 import './globals.css';
+import { currentLang, i18n } from '@/lib/api';
 import { getSite, pick, themeCss } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,8 +21,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const site = await getSite();
+  // Visitor's language (cookie set by the language switch), else the institution default.
+  const { lang, rtl } = await i18n(await currentLang(site?.default_language ?? 'en'));
   return (
-    <html lang={site?.default_language ?? 'en'} dir={site?.default_language === 'ur' ? 'rtl' : 'ltr'}>
+    <html lang={lang} dir={rtl ? 'rtl' : 'ltr'}>
       <head>{site && <style dangerouslySetInnerHTML={{ __html: themeCss(site) }} />}</head>
       <body>{children}</body>
     </html>

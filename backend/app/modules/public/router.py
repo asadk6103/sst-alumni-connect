@@ -32,19 +32,31 @@ async def _site_payload(db: AsyncSession) -> dict:
     sec = await settings_store.get_group(db, "security")
     return {
         "installed": await settings_store.is_installed(db),
-        "app_name": general.app_name, "app_description": general.app_description, "app_url": general.app_url,
-        "institution_name": general.institution_name, "contact_email": general.contact_email,
-        "contact_phone": general.contact_phone, "address": general.address,
-        "default_language": general.default_language, "timezone": general.timezone,
-        "date_format": general.date_format, "time_format": general.time_format, "currency": general.currency,
-        "branding": brand.model_dump(mode="json"), "branding_version": await settings_store.branding_version(db),
+        "app_name": general.app_name,
+        "app_description": general.app_description,
+        "app_url": general.app_url,
+        "institution_name": general.institution_name,
+        "contact_email": general.contact_email,
+        "contact_phone": general.contact_phone,
+        "address": general.address,
+        "default_language": general.default_language,
+        "timezone": general.timezone,
+        "date_format": general.date_format,
+        "time_format": general.time_format,
+        "currency": general.currency,
+        "branding": brand.model_dump(mode="json"),
+        "branding_version": await settings_store.branding_version(db),
         "assets": assets,
         "modules": await settings_store.modules(db),
-        "auth": {"require_email_verification": sec.require_email_verification,
-                 "require_phone_verification": sec.require_phone_verification,
-                 "min_password_length": sec.min_password_length, "require_uppercase": sec.require_uppercase,
-                 "require_lowercase": sec.require_lowercase, "require_digit": sec.require_digit,
-                 "require_symbol": sec.require_symbol},
+        "auth": {
+            "require_email_verification": sec.require_email_verification,
+            "require_phone_verification": sec.require_phone_verification,
+            "min_password_length": sec.min_password_length,
+            "require_uppercase": sec.require_uppercase,
+            "require_lowercase": sec.require_lowercase,
+            "require_digit": sec.require_digit,
+            "require_symbol": sec.require_symbol,
+        },
     }
 
 
@@ -56,8 +68,7 @@ async def site(response: Response, user: Principal | None = Depends(optional_use
     roles = set(user.roles) if user else set()
     features = {k: en and (not r or bool(roles.intersection(r))) for k, (en, r) in flags.items()}
     # Never cache before installation (the wizard flips this); shared caches only for anonymous visitors.
-    response.headers["Cache-Control"] = ("no-store" if not payload["installed"]
-                                         else "private, max-age=15" if user else "public, max-age=15")
+    response.headers["Cache-Control"] = "no-store" if not payload["installed"] else "private, max-age=15" if user else "public, max-age=15"
     return {"data": {**payload, "features": features}}
 
 

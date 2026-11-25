@@ -18,9 +18,13 @@ def redis() -> Redis:
     global _client
     if _client is None:
         # Reconnect and retry transparently when Redis restarts or a pooled connection went stale.
-        _client = Redis.from_url(infra().redis_url, decode_responses=True, health_check_interval=30,
-                                 retry=Retry(ExponentialBackoff(cap=1.0, base=0.05), 3),
-                                 retry_on_error=[RedisConnectionError, RedisTimeoutError])
+        _client = Redis.from_url(
+            infra().redis_url,
+            decode_responses=True,
+            health_check_interval=30,
+            retry=Retry(ExponentialBackoff(cap=1.0, base=0.05), 3),
+            retry_on_error=[RedisConnectionError, RedisTimeoutError],
+        )
     return _client
 
 

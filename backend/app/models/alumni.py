@@ -85,6 +85,7 @@ class AlumniProfile(Timestamps, Base):
     search: Mapped[str | None] = mapped_column(TSVECTOR)
 
     __table_args__ = (Index("ix_alumni_profiles_search", "search", postgresql_using="gin"),)
+    custom_fields: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
 
 class AlumniEducation(UUIDPk, Timestamps, Base):
@@ -140,8 +141,14 @@ class AlumniConnection(UUIDPk, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # One relationship per pair, whichever side asked.
-    __table_args__ = (Index("uq_alumni_connections_pair", text("least(requester_id, addressee_id)"),
-                            text("greatest(requester_id, addressee_id)"), unique=True),)
+    __table_args__ = (
+        Index(
+            "uq_alumni_connections_pair",
+            text("least(requester_id, addressee_id)"),
+            text("greatest(requester_id, addressee_id)"),
+            unique=True,
+        ),
+    )
 
 
 class AlumniFollow(Base):

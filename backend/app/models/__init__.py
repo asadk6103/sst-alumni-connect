@@ -1,3 +1,4 @@
+from .administration import CmsPage, ContactMessage, CustomField, Language, NavMenu, NewsPost, Translation
 from .alumni import (
     AlumniAchievement,
     AlumniConnection,
@@ -70,6 +71,13 @@ from .messaging import (
 )
 
 __all__ = [
+    "CmsPage",
+    "ContactMessage",
+    "CustomField",
+    "Language",
+    "NavMenu",
+    "NewsPost",
+    "Translation",
     "Base",
     "ScholarshipAward",
     "Scholarship",

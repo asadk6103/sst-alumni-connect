@@ -45,8 +45,17 @@ async def ensure_batch_group(db: AsyncSession, user_id: uuid.UUID) -> Discussion
         b = await db.get(Batch, prof.batch_id)
         await db.execute(
             pg_insert(DiscussionGroup)
-            .values(id=uuid.uuid4(), name=f"{b.name} community", description=f"Private community of {b.name}.", kind="batch",
-                    batch_id=b.id, join_policy="approval", status="active", member_count=0, post_count=0)
+            .values(
+                id=uuid.uuid4(),
+                name=f"{b.name} community",
+                description=f"Private community of {b.name}.",
+                kind="batch",
+                batch_id=b.id,
+                join_policy="approval",
+                status="active",
+                member_count=0,
+                post_count=0,
+            )
             .on_conflict_do_nothing(index_elements=["batch_id"])
         )
         g = (await db.execute(select(DiscussionGroup).where(DiscussionGroup.batch_id == prof.batch_id))).scalar_one()
@@ -58,8 +67,11 @@ async def ensure_batch_group(db: AsyncSession, user_id: uuid.UUID) -> Discussion
     if added.rowcount:
         await db.execute(update(DiscussionGroup).where(DiscussionGroup.id == g.id).values(member_count=DiscussionGroup.member_count + 1))
     else:
-        await db.execute(update(GroupMember).where(GroupMember.group_id == g.id, GroupMember.user_id == user_id,
-                                                   GroupMember.status == "pending").values(status="active"))
+        await db.execute(
+            update(GroupMember)
+            .where(GroupMember.group_id == g.id, GroupMember.user_id == user_id, GroupMember.status == "pending")
+            .values(status="active")
+        )
     return g
 
 

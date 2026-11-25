@@ -18,9 +18,14 @@ router = APIRouter(prefix="/api/v1/admin/media", tags=["Admin: media library"])
 
 
 @router.get("", summary="Browse the media library")
-async def list_media(q: str | None = Query(None, max_length=100), folder: str | None = Query(None, max_length=60),
-                     kind: str | None = Query(None, pattern="^(image|document)$"), p: PageParams = Depends(page_params),
-                     _: Principal = Depends(require("media.view")), db: AsyncSession = Depends(get_db)):
+async def list_media(
+    q: str | None = Query(None, max_length=100),
+    folder: str | None = Query(None, max_length=60),
+    kind: str | None = Query(None, pattern="^(image|document)$"),
+    p: PageParams = Depends(page_params),
+    _: Principal = Depends(require("media.view")),
+    db: AsyncSession = Depends(get_db),
+):
     stmt = select(Media).where(Media.deleted_at.is_(None), Media.private.is_(False))
     if q:
         stmt = stmt.where(Media.filename.ilike(f"%{q}%") | Media.alt.ilike(f"%{q}%"))
@@ -35,14 +40,20 @@ async def list_media(q: str | None = Query(None, max_length=100), folder: str | 
 
 
 @router.post("", status_code=201, summary="Upload a file")
-async def upload(request: Request, file: UploadFile = File(...), folder: str = Form("general", max_length=60),
-                 alt: str = Form("", max_length=300), images_only: bool = Form(False),
-                 me: Principal = Depends(require("media.create")), db: AsyncSession = Depends(get_db)):
+async def upload(
+    request: Request,
+    file: UploadFile = File(...),
+    folder: str = Form("general", max_length=60),
+    alt: str = Form("", max_length=300),
+    images_only: bool = Form(False),
+    me: Principal = Depends(require("media.create")),
+    db: AsyncSession = Depends(get_db),
+):
     data = await file.read()
-    m = await media.upload(db, data=data, filename=file.filename or "upload", folder=folder, alt=alt,
-                           images_only=images_only, actor=me.id)
-    await record(db, actor_id=me.id, action="upload", entity="media", entity_id=m.id, summary=f"Uploaded {m.filename}",
-                 ip=client_ip(request))
+    m = await media.upload(db, data=data, filename=file.filename or "upload", folder=folder, alt=alt, images_only=images_only, actor=me.id)
+    await record(
+        db, actor_id=me.id, action="upload", entity="media", entity_id=m.id, summary=f"Uploaded {m.filename}", ip=client_ip(request)
+    )
     return {"data": await media.to_public(db, m)}
 
 
@@ -51,8 +62,7 @@ class MediaUpdate(BaseModel):
 
 
 @router.patch("/{media_id}", summary="Edit alternative text")
-async def update(media_id: uuid.UUID, body: MediaUpdate, _: Principal = Depends(require("media.edit")),
-                 db: AsyncSession = Depends(get_db)):
+async def update(media_id: uuid.UUID, body: MediaUpdate, _: Principal = Depends(require("media.edit")), db: AsyncSession = Depends(get_db)):
     m = await db.get(Media, media_id)
     if not m or m.deleted_at or m.private:
         raise not_found("File")
@@ -61,12 +71,14 @@ async def update(media_id: uuid.UUID, body: MediaUpdate, _: Principal = Depends(
 
 
 @router.delete("/{media_id}", summary="Delete a file (kept in storage until purged)")
-async def delete(media_id: uuid.UUID, request: Request, me: Principal = Depends(require("media.delete")),
-                 db: AsyncSession = Depends(get_db)):
+async def delete(
+    media_id: uuid.UUID, request: Request, me: Principal = Depends(require("media.delete")), db: AsyncSession = Depends(get_db)
+):
     m = await db.get(Media, media_id)
     if not m or m.deleted_at or m.private:
         raise not_found("File")
     m.deleted_at = datetime.now(UTC)
-    await record(db, actor_id=me.id, action="delete", entity="media", entity_id=m.id, summary=f"Deleted {m.filename}",
-                 ip=client_ip(request))
+    await record(
+        db, actor_id=me.id, action="delete", entity="media", entity_id=m.id, summary=f"Deleted {m.filename}", ip=client_ip(request)
+    )
     return {"data": {"ok": True}}

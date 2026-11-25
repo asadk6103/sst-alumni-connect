@@ -62,6 +62,7 @@ class RegisterIn(SchoolFields, PresentFields):
     phone: str | None = Field(None, pattern=PHONE)
     password: str = Field(..., min_length=1, max_length=256)
     accept_terms: bool = False
+    custom_fields: dict = Field(default_factory=dict)
 
     _n = field_validator("full_name", mode="before")(_clean)
 
@@ -72,6 +73,7 @@ class ProfileIn(PresentFields, SchoolFields):
     full_name: str | None = Field(None, min_length=2, max_length=150)
     industry: str | None = Field(None, max_length=100)
     bio: str | None = Field(None, max_length=2000)
+    custom_fields: dict | None = None
     website: str | None = None
     linkedin: str | None = None
 
@@ -154,8 +156,9 @@ def check_years(start: int | None, end: int | None, field: str = "end_year") -> 
         fail(field, "The end cannot be before the start.")
 
 
-async def validate_school(db: AsyncSession, body: SchoolFields, cfg: AlumniSettings, *, registering: bool,
-                          fields: set[str] | None = None) -> None:
+async def validate_school(
+    db: AsyncSession, body: SchoolFields, cfg: AlumniSettings, *, registering: bool, fields: set[str] | None = None
+) -> None:
     """School identity rules shared by registration, profile editing and administration."""
     this_year = datetime.now(UTC).year
     has = (lambda f: True) if fields is None else (lambda f: f in fields)

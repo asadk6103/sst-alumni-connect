@@ -13,8 +13,12 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 REQUESTS = Counter("http_requests_total", "HTTP requests", ["method", "route", "status"])
-LATENCY = Histogram("http_request_duration_seconds", "HTTP request latency", ["method", "route"],
-                    buckets=(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1, 2, 5))
+LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency",
+    ["method", "route"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1, 2, 5),
+)
 IN_FLIGHT = Gauge("http_requests_in_flight", "Requests being processed")
 SOCKETS = Gauge("realtime_connections", "Open Socket.IO connections on this gateway")
 
@@ -71,8 +75,7 @@ def latency_summary(limit: int = 25) -> list[dict]:
     out = []
     for name, dq in _samples.items():
         v = list(dq)
-        out.append({"route": name, "count": len(v), "p50_ms": percentile(v, 50), "p95_ms": percentile(v, 95),
-                    "p99_ms": percentile(v, 99)})
+        out.append({"route": name, "count": len(v), "p50_ms": percentile(v, 50), "p95_ms": percentile(v, 95), "p99_ms": percentile(v, 99)})
     return sorted(out, key=lambda r: r["p95_ms"], reverse=True)[:limit]
 
 

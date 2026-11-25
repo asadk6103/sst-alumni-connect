@@ -27,7 +27,7 @@ from ...models import (
     User,
     VerificationEvent,
 )
-from ...services import media
+from ...services import custom_fields, media
 
 VERIFIED_ROLE = {"alumni": "verified_alumni", "student": "student"}
 UNVERIFIED_ROLE = "unverified_alumni"
@@ -96,8 +96,10 @@ async def find_record(db: AsyncSession, profile: AlumniProfile, user: User) -> t
     dob_ok = rec.date_of_birth is None or profile.date_of_birth is None or rec.date_of_birth == profile.date_of_birth
     if not (name_ok and year_ok and dob_ok):
         return (rec, "partial") if (name_ok or year_ok) else (None, None)
-    contact = bool((rec.email and rec.email.lower() == user.email.lower())
-                   or (rec.phone and user.phone and phone_digits(rec.phone) == phone_digits(user.phone)))
+    contact = bool(
+        (rec.email and rec.email.lower() == user.email.lower())
+        or (rec.phone and user.phone and phone_digits(rec.phone) == phone_digits(user.phone))
+    )
     return rec, "strong" if contact else "partial"
 
 
@@ -124,15 +126,21 @@ async def try_auto_verify(db: AsyncSession, user: User) -> bool:
     rec = await db.get(StudentRecord, profile.matched_record_id)
     if not rec or not _contact_proven(rec, user):
         return False
-    await approve(db, user, profile, method="record_match", actor_id=None, record=rec,
-                  note="Matched institutional record and verified contact details.")
+    await approve(
+        db,
+        user,
+        profile,
+        method="record_match",
+        actor_id=None,
+        record=rec,
+        note="Matched institutional record and verified contact details.",
+    )
     return True
 
 
 # ── verification state changes ──────────────────────────────────────────────
 async def log(db: AsyncSession, user_id, action: str, method: str | None = None, note: str | None = None, actor_id=None):
-    db.add(VerificationEvent(user_id=user_id, action=action, method=method, note=(note or None) and note[:500],
-                             actor_id=actor_id))
+    db.add(VerificationEvent(user_id=user_id, action=action, method=method, note=(note or None) and note[:500], actor_id=actor_id))
 
 
 async def _roles_by_key(db: AsyncSession, keys: set[str]) -> dict[str, Role]:
@@ -148,15 +156,36 @@ async def set_member_role(db: AsyncSession, user: User, kind: str, verified: boo
     forget_principals(user.id)
 
 
-async def approve(db: AsyncSession, user: User, profile: AlumniProfile, *, method: str, actor_id,
-                  record: StudentRecord | None = None, note: str | None = None, notify: bool = True) -> None:
+async def approve(
+    db: AsyncSession,
+    user: User,
+    profile: AlumniProfile,
+    *,
+    method: str,
+    actor_id,
+    record: StudentRecord | None = None,
+    note: str | None = None,
+    notify: bool = True,
+) -> None:
     if profile.reg_norm:
-        dup = (await db.execute(select(User.full_name).join(AlumniProfile, AlumniProfile.user_id == User.id).where(
-            AlumniProfile.reg_norm == profile.reg_norm, AlumniProfile.verification_status == "verified",
-            AlumniProfile.user_id != user.id, User.deleted_at.is_(None)))).first()
+        dup = (
+            await db.execute(
+                select(User.full_name)
+                .join(AlumniProfile, AlumniProfile.user_id == User.id)
+                .where(
+                    AlumniProfile.reg_norm == profile.reg_norm,
+                    AlumniProfile.verification_status == "verified",
+                    AlumniProfile.user_id != user.id,
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).first()
         if dup:
-            raise AppError(409, "DUPLICATE_REGISTRATION_NO",
-                           f"Registration number {profile.registration_no} already belongs to verified member {dup[0]}.")
+            raise AppError(
+                409,
+                "DUPLICATE_REGISTRATION_NO",
+                f"Registration number {profile.registration_no} already belongs to verified member {dup[0]}.",
+            )
     profile.verification_status, profile.verification_method = "verified", method
     profile.verified_at, profile.verified_by, profile.rejection_reason = now(), actor_id, None
     if record:
@@ -170,9 +199,16 @@ async def approve(db: AsyncSession, user: User, profile: AlumniProfile, *, metho
         general = await settings_store.get_group(db, "general")
         from ...services import notifications
 
-        await notifications.notify(db, user.id, "verification", "verified", "Your profile is verified", link="/portal",
-                                   body="Welcome to the alumni community.",
-                                   email=("alumni.verified", {"link": f"{general.app_url}/portal"}))
+        await notifications.notify(
+            db,
+            user.id,
+            "verification",
+            "verified",
+            "Your profile is verified",
+            link="/portal",
+            body="Welcome to the alumni community.",
+            email=("alumni.verified", {"link": f"{general.app_url}/portal"}),
+        )
     await refresh_search(db, user.id)
 
 
@@ -189,9 +225,16 @@ async def reject(db: AsyncSession, user: User, profile: AlumniProfile, *, reason
     general = await settings_store.get_group(db, "general")
     from ...services import notifications
 
-    await notifications.notify(db, user.id, "verification", "rejected", "Your verification needs attention", body=reason,
-                               link="/portal/profile/verification",
-                               email=("alumni.rejected", {"reason": reason, "link": f"{general.app_url}/portal/profile/verification"}))
+    await notifications.notify(
+        db,
+        user.id,
+        "verification",
+        "rejected",
+        "Your verification needs attention",
+        body=reason,
+        link="/portal/profile/verification",
+        email=("alumni.rejected", {"reason": reason, "link": f"{general.app_url}/portal/profile/verification"}),
+    )
     await refresh_search(db, user.id)
 
 
@@ -204,8 +247,7 @@ def privacy_of(profile: AlumniProfile) -> dict[str, str]:
 
 def default_privacy(cfg: AlumniSettings) -> dict[str, str]:
     contact = cfg.default_contact_visibility
-    return {k: (contact if k in ("email", "phone") else "only_me" if k == "birthday" else "members")
-            for k in PRIVACY_SECTIONS}
+    return {k: (contact if k in ("email", "phone") else "only_me" if k == "birthday" else "members") for k in PRIVACY_SECTIONS}
 
 
 class Viewer:
@@ -232,8 +274,8 @@ class Viewer:
 
 async def connected_ids(db: AsyncSession, user_id: uuid.UUID, among: list[uuid.UUID] | None = None) -> set[uuid.UUID]:
     stmt = select(AlumniConnection.requester_id, AlumniConnection.addressee_id).where(
-        AlumniConnection.status == "accepted",
-        or_(AlumniConnection.requester_id == user_id, AlumniConnection.addressee_id == user_id))
+        AlumniConnection.status == "accepted", or_(AlumniConnection.requester_id == user_id, AlumniConnection.addressee_id == user_id)
+    )
     if among is not None:
         if not among:
             return set()
@@ -247,17 +289,25 @@ async def relations(db: AsyncSession, me: uuid.UUID, ids: list[uuid.UUID]) -> di
     out = {i: {"connection": None, "connection_id": None, "following": False} for i in ids}
     if not ids:
         return out
-    rows = (await db.execute(select(AlumniConnection).where(or_(
-        (AlumniConnection.requester_id == me) & AlumniConnection.addressee_id.in_(ids),
-        (AlumniConnection.addressee_id == me) & AlumniConnection.requester_id.in_(ids))))).scalars()
+    rows = (
+        await db.execute(
+            select(AlumniConnection).where(
+                or_(
+                    (AlumniConnection.requester_id == me) & AlumniConnection.addressee_id.in_(ids),
+                    (AlumniConnection.addressee_id == me) & AlumniConnection.requester_id.in_(ids),
+                )
+            )
+        )
+    ).scalars()
     for c in rows:
         other = c.addressee_id if c.requester_id == me else c.requester_id
         state = c.status if c.status != "pending" else ("sent" if c.requester_id == me else "received")
         if c.status == "declined":
             state = "sent" if c.requester_id == me else None  # a declined request looks pending to the sender only
         out[other].update(connection=state, connection_id=str(c.id) if state else None)
-    for (fid,) in (await db.execute(select(AlumniFollow.followee_id).where(
-            AlumniFollow.follower_id == me, AlumniFollow.followee_id.in_(ids)))).all():
+    for (fid,) in (
+        await db.execute(select(AlumniFollow.followee_id).where(AlumniFollow.follower_id == me, AlumniFollow.followee_id.in_(ids)))
+    ).all():
         out[fid]["following"] = True
     return out
 
@@ -283,15 +333,23 @@ async def completion(db: AsyncSession, user: User, profile: AlumniProfile) -> tu
     uid = user.id
     n_skills = (await db.execute(select(func.count()).select_from(AlumniSkill).where(AlumniSkill.user_id == uid))).scalar_one()
     n_emp = (await db.execute(select(func.count()).select_from(AlumniEmployment).where(AlumniEmployment.user_id == uid))).scalar_one()
-    n_edu = (await db.execute(select(func.count()).select_from(AlumniEducation).where(
-        AlumniEducation.user_id == uid, AlumniEducation.is_sst.is_(False)))).scalar_one()
+    n_edu = (
+        await db.execute(
+            select(func.count()).select_from(AlumniEducation).where(AlumniEducation.user_id == uid, AlumniEducation.is_sst.is_(False))
+        )
+    ).scalar_one()
     done = {
-        "photo": bool(profile.photo_id), "bio": bool(profile.bio and len(profile.bio.strip()) >= 30),
+        "photo": bool(profile.photo_id),
+        "bio": bool(profile.bio and len(profile.bio.strip()) >= 30),
         "location": bool(profile.city and profile.country),
         "school": bool(profile.graduation_year and profile.batch_id),
-        "position": bool(profile.designation and profile.organization), "industry": bool(profile.industry),
-        "skills": n_skills >= 3, "experience": n_emp > 0, "education": n_edu > 0,
-        "links": bool(profile.linkedin or profile.website), "phone": bool(user.phone_verified_at),
+        "position": bool(profile.designation and profile.organization),
+        "industry": bool(profile.industry),
+        "skills": n_skills >= 3,
+        "experience": n_emp > 0,
+        "education": n_edu > 0,
+        "links": bool(profile.linkedin or profile.website),
+        "phone": bool(user.phone_verified_at),
     }
     score = sum(w for k, w, *_ in COMPLETION if done[k])
     missing = [{"key": k, "label": label, "tab": tab, "weight": w} for k, w, label, tab in COMPLETION if not done[k]]
@@ -316,8 +374,9 @@ async def refresh_search(db: AsyncSession, user_id: uuid.UUID) -> None:
         parts += [profile.city, profile.country]
     doc = " ".join(p for p in parts if p)
     score, _ = await completion(db, user, profile)
-    await db.execute(update(AlumniProfile).where(AlumniProfile.user_id == user_id).values(
-        search=func.to_tsvector("simple", doc), completion=score))
+    await db.execute(
+        update(AlumniProfile).where(AlumniProfile.user_id == user_id).values(search=func.to_tsvector("simple", doc), completion=score)
+    )
     await db.refresh(profile, ["search", "completion"])
 
 
@@ -350,13 +409,18 @@ def card(user: User, profile: AlumniProfile, viewer: Viewer, batch: str | None, 
     career = viewer.sees(profile, "career")
     location = viewer.sees(profile, "location")
     return {
-        "id": str(user.id), "full_name": user.full_name, "photo": photo, "kind": profile.kind,
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "photo": photo,
+        "kind": profile.kind,
         "verified": profile.verification_status == "verified",
-        "graduation_year": profile.graduation_year, "batch": batch,
+        "graduation_year": profile.graduation_year,
+        "batch": batch,
         "designation": profile.designation if career else None,
         "organization": profile.organization if career else None,
         "industry": profile.industry if career else None,
-        "city": profile.city if location else None, "country": profile.country if location else None,
+        "city": profile.city if location else None,
+        "country": profile.country if location else None,
         **(rel or {}),
     }
 
@@ -370,44 +434,102 @@ async def detail(db: AsyncSession, user: User, profile: AlumniProfile, viewer: V
     sees = {k: viewer.sees(profile, k) for k in PRIVACY_SECTIONS}
     followers = (await db.execute(select(func.count()).select_from(AlumniFollow).where(AlumniFollow.followee_id == uid))).scalar_one()
     connections = len(await connected_ids(db, uid))
-    out.update({
-        "bio": profile.bio, "admission_year": profile.admission_year, "class_name": profile.class_name,
-        "email": user.email if sees["email"] else None, "phone": user.phone if sees["phone"] else None,
-        "date_of_birth": profile.date_of_birth.isoformat() if sees["birthday"] and profile.date_of_birth else None,
-        "website": profile.website if sees["links"] else None, "linkedin": profile.linkedin if sees["links"] else None,
-        "verified_at": profile.verified_at, "followers": followers, "connections": connections,
-        "member_since": user.created_at, "is_self": uid == viewer.p.id,
-    })
+    out.update(
+        {
+            "bio": profile.bio,
+            "admission_year": profile.admission_year,
+            "class_name": profile.class_name,
+            "email": user.email if sees["email"] else None,
+            "phone": user.phone if sees["phone"] else None,
+            "date_of_birth": profile.date_of_birth.isoformat() if sees["birthday"] and profile.date_of_birth else None,
+            "website": profile.website if sees["links"] else None,
+            "linkedin": profile.linkedin if sees["links"] else None,
+            "verified_at": profile.verified_at,
+            "followers": followers,
+            "connections": connections,
+            "member_since": user.created_at,
+            "is_self": uid == viewer.p.id,
+        }
+    )
     skills = (await db.execute(select(AlumniSkill.name).where(AlumniSkill.user_id == uid).order_by(AlumniSkill.position))).scalars().all()
     out["skills"] = list(skills) if sees["career"] else []
-    emp = (await db.execute(select(AlumniEmployment).where(AlumniEmployment.user_id == uid).order_by(
-        AlumniEmployment.is_current.desc(), AlumniEmployment.start_date.desc().nulls_last()))).scalars().all()
+    emp = (
+        (
+            await db.execute(
+                select(AlumniEmployment)
+                .where(AlumniEmployment.user_id == uid)
+                .order_by(AlumniEmployment.is_current.desc(), AlumniEmployment.start_date.desc().nulls_last())
+            )
+        )
+        .scalars()
+        .all()
+    )
     out["employment"] = [employment_out(e) for e in emp] if sees["career"] else []
-    edu = (await db.execute(select(AlumniEducation).where(AlumniEducation.user_id == uid).order_by(
-        AlumniEducation.is_sst.desc(), AlumniEducation.end_year.desc().nulls_first()))).scalars().all()
+    edu = (
+        (
+            await db.execute(
+                select(AlumniEducation)
+                .where(AlumniEducation.user_id == uid)
+                .order_by(AlumniEducation.is_sst.desc(), AlumniEducation.end_year.desc().nulls_first())
+            )
+        )
+        .scalars()
+        .all()
+    )
     # SST academic history is part of every visible profile; higher education follows the privacy choice.
     out["education"] = [education_out(e) for e in edu if e.is_sst or sees["education"]]
-    ach = (await db.execute(select(AlumniAchievement).where(AlumniAchievement.user_id == uid).order_by(
-        AlumniAchievement.year.desc().nulls_last()))).scalars().all()
+    ach = (
+        (
+            await db.execute(
+                select(AlumniAchievement).where(AlumniAchievement.user_id == uid).order_by(AlumniAchievement.year.desc().nulls_last())
+            )
+        )
+        .scalars()
+        .all()
+    )
     out["achievements"] = [achievement_out(a) for a in ach] if sees["achievements"] else []
+    level = "owner" if viewer.staff or uid == viewer.p.id else "connection" if uid in viewer.connected else "member"
+    out["extra_fields"] = await custom_fields.visible_for(db, "alumni_profile", profile.custom_fields, level)
     return out
 
 
 def education_out(e: AlumniEducation) -> dict:
-    return {"id": str(e.id), "institution": e.institution, "qualification": e.qualification,
-            "field_of_study": e.field_of_study, "start_year": e.start_year, "end_year": e.end_year,
-            "is_sst": e.is_sst, "description": e.description}
+    return {
+        "id": str(e.id),
+        "institution": e.institution,
+        "qualification": e.qualification,
+        "field_of_study": e.field_of_study,
+        "start_year": e.start_year,
+        "end_year": e.end_year,
+        "is_sst": e.is_sst,
+        "description": e.description,
+    }
 
 
 def employment_out(e: AlumniEmployment) -> dict:
-    return {"id": str(e.id), "organization": e.organization, "designation": e.designation, "industry": e.industry,
-            "location": e.location, "start_date": e.start_date, "end_date": e.end_date, "is_current": e.is_current,
-            "description": e.description}
+    return {
+        "id": str(e.id),
+        "organization": e.organization,
+        "designation": e.designation,
+        "industry": e.industry,
+        "location": e.location,
+        "start_date": e.start_date,
+        "end_date": e.end_date,
+        "is_current": e.is_current,
+        "description": e.description,
+    }
 
 
 def achievement_out(a: AlumniAchievement) -> dict:
-    return {"id": str(a.id), "kind": a.kind, "title": a.title, "issuer": a.issuer, "year": a.year, "url": a.url,
-            "description": a.description}
+    return {
+        "id": str(a.id),
+        "kind": a.kind,
+        "title": a.title,
+        "issuer": a.issuer,
+        "year": a.year,
+        "url": a.url,
+        "description": a.description,
+    }
 
 
 async def ensure_profile(db: AsyncSession, user: User) -> AlumniProfile:
@@ -419,9 +541,19 @@ async def ensure_profile(db: AsyncSession, user: User) -> AlumniProfile:
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     # concurrent first requests must not both insert
-    await db.execute(pg_insert(AlumniProfile).values(
-        user_id=user.id, kind="alumni", visibility=cfg.default_profile_visibility, privacy=default_privacy(cfg),
-        verification_status="pending", evidence_ids=[], completion=0).on_conflict_do_nothing(index_elements=["user_id"]))
+    await db.execute(
+        pg_insert(AlumniProfile)
+        .values(
+            user_id=user.id,
+            kind="alumni",
+            visibility=cfg.default_profile_visibility,
+            privacy=default_privacy(cfg),
+            verification_status="pending",
+            evidence_ids=[],
+            completion=0,
+        )
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
     profile = await db.get(AlumniProfile, user.id, populate_existing=True)
     await refresh_search(db, user.id)
     return profile
@@ -437,12 +569,17 @@ async def directory_visible_clause(db: AsyncSession):
 
 def lock_identity_fields(profile: AlumniProfile) -> set[str]:
     """After verification, school identity fields are changed by administrators only."""
-    return {"admission_year", "graduation_year", "registration_no", "batch_id", "kind"} \
-        if profile.verification_status == "verified" else set()
+    return (
+        {"admission_year", "graduation_year", "registration_no", "batch_id", "kind"} if profile.verification_status == "verified" else set()
+    )
 
 
 async def pending_count(db: AsyncSession) -> int:
-    return (await db.execute(select(func.count()).select_from(AlumniProfile).join(User, User.id == AlumniProfile.user_id).where(
-        AlumniProfile.verification_status == "pending", User.deleted_at.is_(None), User.status != "deactivated"))).scalar_one()
-
-
+    return (
+        await db.execute(
+            select(func.count())
+            .select_from(AlumniProfile)
+            .join(User, User.id == AlumniProfile.user_id)
+            .where(AlumniProfile.verification_status == "pending", User.deleted_at.is_(None), User.status != "deactivated")
+        )
+    ).scalar_one()

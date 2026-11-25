@@ -46,10 +46,7 @@ def install(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):
-        details = [
-            {"field": ".".join(str(p) for p in e["loc"][1:]) or str(e["loc"][0]), "message": e["msg"]}
-            for e in exc.errors()
-        ]
+        details = [{"field": ".".join(str(p) for p in e["loc"][1:]) or str(e["loc"][0]), "message": e["msg"]} for e in exc.errors()]
         return ORJSONResponse(_body("VALIDATION_ERROR", "Some fields are not valid.", details), status_code=422)
 
     @app.exception_handler(ValidationError)
@@ -60,8 +57,7 @@ def install(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
-        code = {401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(
-            exc.status_code, "HTTP_ERROR")
+        code = {401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "HTTP_ERROR")
         return ORJSONResponse(_body(code, str(exc.detail)), status_code=exc.status_code, headers=exc.headers)
 
     @app.exception_handler(Exception)

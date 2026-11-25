@@ -4,15 +4,17 @@ import os
 import tempfile
 
 TMP = tempfile.mkdtemp(prefix="alumni-test-")
-os.environ.update({
-    "ENVIRONMENT": "test",
-    "DATABASE_URL": os.environ.get("TEST_DATABASE_URL", "postgresql+asyncpg://sst:sst_test@localhost:5544/alumni_test"),
-    "REDIS_URL": "redis://unused:6379/0",
-    "CONFIG_DIR": os.path.join(TMP, "config"),
-    "STORAGE_DIR": os.path.join(TMP, "storage"),
-    "TRUSTED_PROXIES": "0",
-    "DB_POOL_SIZE": "5",
-})
+os.environ.update(
+    {
+        "ENVIRONMENT": "test",
+        "DATABASE_URL": os.environ.get("TEST_DATABASE_URL", "postgresql+asyncpg://sst:sst_test@localhost:5544/alumni_test"),
+        "REDIS_URL": "redis://unused:6379/0",
+        "CONFIG_DIR": os.path.join(TMP, "config"),
+        "STORAGE_DIR": os.path.join(TMP, "storage"),
+        "TRUSTED_PROXIES": "0",
+        "DB_POOL_SIZE": "5",
+    }
+)
 
 import asyncio  # noqa: E402
 import re  # noqa: E402
@@ -95,8 +97,11 @@ async def client():
 
 ADMIN = {"full_name": "Asad Mehmood", "email": "owner@example.org", "password": "Str0ngPassword!"}
 SETUP_BODY = {
-    "institution": {"institution_name": "SST Public School Rashidabad", "app_url": "https://alumni.example.org",
-                    "contact_email": "alumni@example.org"},
+    "institution": {
+        "institution_name": "SST Public School Rashidabad",
+        "app_url": "https://alumni.example.org",
+        "contact_email": "alumni@example.org",
+    },
     "branding": {"tagline": "Reconnect. Network. Mentor. Give Back."},
     "admin": ADMIN,
     "security": {"min_password_length": 10, "mfa_policy": "optional", "require_email_verification": True},

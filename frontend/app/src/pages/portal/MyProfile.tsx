@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Award, BadgeCheck, Briefcase, Camera, CheckCircle2, Eye, FileText, GraduationCap, KeyRound, Lock, Paperclip, Pencil, Plus,
+import { Award, BadgeCheck, Briefcase, ListPlus, Camera, CheckCircle2, Eye, FileText, GraduationCap, KeyRound, Lock, Paperclip, Pencil, Plus,
   Save, Send, ShieldCheck, Trash2, UserRound, X } from 'lucide-react';
 import { api, download, get } from '@/lib/api';
 import { useAction } from '@/lib/hooks';
@@ -14,6 +14,7 @@ import { Alert, Badge, Card, CardHeader, EmptyState, PageHeader, Progress, Skele
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Dialog, useConfirm } from '@/components/ui/overlay';
 import { PersonAvatar, ProfileBody, VerifiedBadge } from '@/components/alumni';
+import { CustomFieldsForm, customErrors, useCustomFields, type CustomValues } from '@/components/customFields';
 
 const TABS = [
   { key: 'personal', label: 'Personal', icon: UserRound },
@@ -21,6 +22,7 @@ const TABS = [
   { key: 'experience', label: 'Experience', icon: Briefcase },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'achievements', label: 'Achievements', icon: Award },
+  { key: 'more', label: 'Additional details', icon: ListPlus },
   { key: 'privacy', label: 'Privacy', icon: Eye },
   { key: 'verification', label: 'Verification', icon: BadgeCheck },
 ] as const;
@@ -30,6 +32,7 @@ export function MyProfilePage() {
   const nav = useNavigate();
   const q = useQuery({ queryKey: ['my-profile'], queryFn: () => get<MyProfile>('/api/v1/alumni/me') });
   const [preview, setPreview] = useState(false);
+  const extra = useCustomFields('alumni_profile');
   const p = q.data;
   return (
     <>
@@ -50,7 +53,7 @@ export function MyProfilePage() {
               <Progress value={p.completion} className="mt-3" label="Profile completion" />
             </Card>
             <Card className="flex gap-1 overflow-x-auto p-2 lg:block lg:space-y-0.5">
-              {TABS.map((t) => (
+              {TABS.filter((t) => t.key !== 'more' || !!extra.data?.length).map((t) => (
                 <button key={t.key} onClick={() => nav(`/portal/profile/${t.key}`)} aria-current={tab === t.key ? 'page' : undefined}
                   className={cn('flex shrink-0 items-center gap-2.5 rounded-btn px-3 py-2 text-left text-sm lg:w-full',
                     tab === t.key ? 'bg-primary-soft font-medium text-primary' : 'text-ink hover:bg-canvas')}>
@@ -66,6 +69,7 @@ export function MyProfilePage() {
             {tab === 'experience' && <Entries<Employment> p={p} section="employment" />}
             {tab === 'education' && <Entries<Education> p={p} section="education" />}
             {tab === 'achievements' && <Entries<Achievement> p={p} section="achievements" />}
+            {tab === 'more' && extra.data && <MoreDetails p={p} />}
             {tab === 'privacy' && <Privacy p={p} />}
             {tab === 'verification' && <Verification p={p} />}
           </div>
@@ -156,6 +160,26 @@ function Personal({ p }: { p: MyProfile }) {
         </div>
       </Card>
     </>
+  );
+}
+
+function MoreDetails({ p }: { p: MyProfile }) {
+  const defs = useCustomFields('alumni_profile');
+  const [v, setV] = useState<CustomValues>(p.custom_fields ?? {});
+  const save = useAction(() => api('/api/v1/alumni/me', { method: 'PUT', body: { custom_fields: v } }),
+    { success: 'Profile saved.', invalidate: [['my-profile']] });
+  return (
+    <Card>
+      <CardHeader title="Additional details" icon={ListPlus} description="Extra information the alumni office asks members to share. Each item shows who can see it."
+        action={<Button onClick={() => save.mutate(undefined)} loading={save.isPending}><Save />Save</Button>} />
+      <div className="p-5">
+        {defs.data && <CustomFieldsForm defs={defs.data} value={v} onChange={setV} errors={customErrors(save.fieldErrors)} />}
+        <p className="mt-4 text-xs text-ink-muted">
+          {defs.data?.some((d) => d.visibility === 'private') && 'Fields marked private are seen only by you and the alumni office. '}
+          Other fields follow the visibility chosen by the alumni office for each question.
+        </p>
+      </div>
+    </Card>
   );
 }
 

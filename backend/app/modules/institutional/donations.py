@@ -27,7 +27,7 @@ from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
 from ...core.settings_schemas import DonationSettings
 from ...models import Campaign, Donation, Media, Scholarship, ScholarshipAward, User
-from ...services import notifications
+from ...services import custom_fields, notifications
 from ...services.templates import simple_html
 from ..events.service import image
 
@@ -129,6 +129,7 @@ def donation_out(d: Donation, campaign: Campaign | None = None, staff: bool = Fa
         "created_at": d.created_at,
         "confirmed_at": d.confirmed_at,
         "campaign": {"id": str(campaign.id), "title": campaign.title, "slug": campaign.slug} if campaign else None,
+        "custom_fields": d.custom_fields or {},  # only ever returned to the donor and finance staff
     }
     if staff:
         out.update(
@@ -192,6 +193,7 @@ class PledgeIn(BaseModel):
     anonymous: bool = False
     recognition_consent: bool = False
     message: str | None = Field(None, max_length=500)
+    custom_fields: dict = Field(default_factory=dict)
 
 
 def _reference() -> str:
@@ -214,8 +216,10 @@ async def pledge(body: PledgeIn, me: Principal = Depends(require("portal.donate"
         if not c or c.status != "active":
             raise conflict("CAMPAIGN_CLOSED", "This campaign is not accepting donations.")
         currency, category = c.currency, c.category
+    extra = await custom_fields.clean(db, "donation", body.custom_fields, actor=me.id)
     u = await db.get(User, me.id)
     d = Donation(
+        custom_fields=extra,
         campaign_id=c.id if c else None,
         user_id=me.id,
         donor_name=u.full_name,

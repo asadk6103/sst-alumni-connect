@@ -78,11 +78,13 @@ async def principal_for_session(db: AsyncSession, sid: uuid.UUID, uid: uuid.UUID
     hit = _principals.get(sid)
     if hit and time.monotonic() - hit[0] < PRINCIPAL_CACHE_SECONDS:
         return hit[1]
-    row = (await db.execute(
-        select(User, Session)
-        .join(Session, Session.user_id == User.id)
-        .where(Session.id == sid, User.id == uid, User.deleted_at.is_(None))
-    )).first()
+    row = (
+        await db.execute(
+            select(User, Session)
+            .join(Session, Session.user_id == User.id)
+            .where(Session.id == sid, User.id == uid, User.deleted_at.is_(None))
+        )
+    ).first()
     if not row:
         return None
     user, session = row
@@ -90,18 +92,28 @@ async def principal_for_session(db: AsyncSession, sid: uuid.UUID, uid: uuid.UUID
     if session.revoked_at or session.expires_at <= now or user.status != "active":
         _principals.pop(sid, None)
         return None
-    perm_rows = (await db.execute(
-        select(Role.key, Role.is_staff, Permission.key)
-        .select_from(user_roles)
-        .join(Role, Role.id == user_roles.c.role_id)
-        .outerjoin(role_permissions, role_permissions.c.role_id == Role.id)
-        .outerjoin(Permission, Permission.id == role_permissions.c.permission_id)
-        .where(user_roles.c.user_id == uid)
-    )).all()
+    perm_rows = (
+        await db.execute(
+            select(Role.key, Role.is_staff, Permission.key)
+            .select_from(user_roles)
+            .join(Role, Role.id == user_roles.c.role_id)
+            .outerjoin(role_permissions, role_permissions.c.role_id == Role.id)
+            .outerjoin(Permission, Permission.id == role_permissions.c.permission_id)
+            .where(user_roles.c.user_id == uid)
+        )
+    ).all()
     roles = sorted({r[0] for r in perm_rows})
-    p = Principal(id=user.id, session_id=sid, email=user.email, full_name=user.full_name, status=user.status,
-                  roles=roles, permissions={r[2] for r in perm_rows if r[2]}, is_staff=any(r[1] for r in perm_rows),
-                  mfa_enabled=user.totp_enabled)
+    p = Principal(
+        id=user.id,
+        session_id=sid,
+        email=user.email,
+        full_name=user.full_name,
+        status=user.status,
+        roles=roles,
+        permissions={r[2] for r in perm_rows if r[2]},
+        is_staff=any(r[1] for r in perm_rows),
+        mfa_enabled=user.totp_enabled,
+    )
     _principals[sid] = (time.monotonic(), p)
     return p
 

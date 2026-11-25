@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from './lib/api';
 import { SiteProvider } from './lib/site';
 import { AuthProvider } from './lib/auth';
+import { I18nProvider } from './lib/i18n';
 import { FeedbackProvider } from './components/ui/overlay';
 import { App } from './App';
 import './index.css';
@@ -26,7 +27,9 @@ createRoot(document.getElementById('root')!).render(
         <FeedbackProvider>
           <SiteProvider>
             <AuthProvider>
-              <App />
+              <I18nProvider>
+                <App />
+              </I18nProvider>
             </AuthProvider>
           </SiteProvider>
         </FeedbackProvider>
