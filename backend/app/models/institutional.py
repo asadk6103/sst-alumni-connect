@@ -37,6 +37,7 @@ class NotificationPreference(Base):
     category: Mapped[str] = mapped_column(String(30), primary_key=True)
     in_app: Mapped[bool] = mapped_column(Boolean, default=True)
     email: Mapped[bool] = mapped_column(Boolean, default=True)
+    push: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
 
 
 # ── donations and scholarships ──────────────────────────────────────────────
@@ -178,4 +179,18 @@ class AlbumPhoto(Base):
     media_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("media_library.id", ondelete="CASCADE"), primary_key=True)
     caption: Mapped[str] = mapped_column(String(300), default="")
     position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── mobile push ─────────────────────────────────────────────────────────────
+class PushDevice(UUIDPk, Base):
+    """A mobile device that receives push notifications (Expo push token) for the signed-in member."""
+
+    __tablename__ = "push_devices"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String(200), unique=True)
+    platform: Mapped[str] = mapped_column(String(10))  # android | ios
+    device_name: Mapped[str | None] = mapped_column(String(120))
+    app_version: Mapped[str | None] = mapped_column(String(30))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

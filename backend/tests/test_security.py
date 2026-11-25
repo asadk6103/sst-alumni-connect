@@ -104,6 +104,9 @@ async def test_cross_site_cookie_requests_are_blocked(client, installed):
     assert r.status_code == 200
     evil = await client.post("/api/v1/auth/refresh", headers={"origin": "https://evil.example"})
     assert evil.status_code == 403 and evil.json()["error"]["code"] == "CROSS_SITE_REQUEST"
+    # behind nginx the Host header has no port while the browser's Origin does
+    proxied = await client.post("/api/v1/auth/refresh", headers={"origin": "http://testserver:8080", "host": "testserver"})
+    assert proxied.status_code == 200, proxied.text
     same = await client.post("/api/v1/auth/refresh", headers={"origin": "https://testserver"})
     assert same.status_code == 200 and same.json()["data"]["access_token"]
 
@@ -131,10 +134,18 @@ async def test_object_level_access(client, installed):
         assert (await client.get(path, headers=auth(b_tok))).status_code in (403, 404)
     assert (await client.post(f"/api/v1/donations/{d['id']}/cancel", headers=auth(b_tok))).status_code in (403, 404)
     # B cannot read a conversation B is not part of
-    conv = await client.post("/api/v1/messages/conversations", headers=auth(a_tok), json={"user_id": a_id})
-    if conv.status_code in (200, 201):
-        cid = conv.json()["data"]["id"]
-        assert (await client.get(f"/api/v1/messages/conversations/{cid}/messages", headers=auth(b_tok))).status_code in (403, 404)
+    c_tok, c_id = await _verified(client, installed, "idor-c@example.org", "Idor Gamma", 2010)
+    await client.post("/api/v1/alumni/connections", headers=auth(a_tok), json={"user_id": c_id})
+    req = (await client.get("/api/v1/alumni/connections?type=received", headers=auth(c_tok))).json()["data"][0]["request_id"]
+    await client.post(f"/api/v1/alumni/connections/{req}/accept", headers=auth(c_tok))
+    conv = await client.post("/api/v1/messages/conversations/direct", headers=auth(a_tok), json={"user_id": c_id})
+    assert conv.status_code == 200, conv.text
+    cid = conv.json()["data"]["id"]
+    assert (await client.get(f"/api/v1/messages/conversations/{cid}/messages", headers=auth(b_tok))).status_code in (403, 404)
+    assert (await client.post(f"/api/v1/messages/conversations/{cid}/messages", headers=auth(b_tok), json={"body": "x"})).status_code in (
+        403,
+        404,
+    )
 
 
 async def test_personal_data_export_and_deletion(client, installed):

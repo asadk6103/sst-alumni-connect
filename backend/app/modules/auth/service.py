@@ -45,6 +45,15 @@ def set_refresh_cookie(request: Request, response: Response, token: str, max_age
     )
 
 
+def is_mobile(request: Request) -> bool:
+    """The mobile app cannot use cookies: it sends X-Client: mobile and keeps the refresh token in secure storage."""
+    return request.headers.get("x-client") == "mobile"
+
+
+def presented_refresh(request: Request) -> str | None:
+    return request.cookies.get(REFRESH_COOKIE) or (request.headers.get("x-refresh-token") if is_mobile(request) else None)
+
+
 def clear_refresh_cookie(request: Request, response: Response) -> None:
     response.delete_cookie(REFRESH_COOKIE, path=COOKIE_PATH, httponly=True, samesite="strict", secure=request.url.scheme == "https")
 
@@ -62,12 +71,16 @@ async def issue_session(db: AsyncSession, request: Request, response: Response, 
     db.add(session)
     user.last_login_at = now()
     await db.flush()
-    set_refresh_cookie(request, response, refresh, sec.session_idle_minutes * 60)
-    return {"access_token": create_access_token(user.id, session.id), "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
+    out = {"access_token": create_access_token(user.id, session.id), "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
+    if is_mobile(request):
+        out["refresh_token"] = refresh
+    else:
+        set_refresh_cookie(request, response, refresh, sec.session_idle_minutes * 60)
+    return out
 
 
 async def rotate_session(db: AsyncSession, request: Request, response: Response) -> dict:
-    token = request.cookies.get(REFRESH_COOKIE)
+    token = presented_refresh(request)
     if not token:
         raise AppError(401, "UNAUTHENTICATED", "Please sign in.")
     hashed = token_hash(token)
@@ -102,8 +115,12 @@ async def rotate_session(db: AsyncSession, request: Request, response: Response)
     session.last_used_at = now()
     session.expires_at = min(now() + timedelta(minutes=sec.session_idle_minutes), absolute_end)
     await db.flush()
-    set_refresh_cookie(request, response, new_token, int((session.expires_at - now()).total_seconds()))
-    return {"access_token": create_access_token(user.id, session.id), "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
+    out = {"access_token": create_access_token(user.id, session.id), "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
+    if is_mobile(request):
+        out["refresh_token"] = new_token
+    else:
+        set_refresh_cookie(request, response, new_token, int((session.expires_at - now()).total_seconds()))
+    return out
 
 
 async def revoke_all(db: AsyncSession, user_id: uuid.UUID, except_session: uuid.UUID | None = None) -> int:
@@ -174,8 +191,12 @@ async def check_origin(request: Request, db: AsyncSession) -> None:
     origin = request.headers.get("origin")
     if not origin:
         return  # same-origin navigations and non-browser clients send none
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
-    if origin.split("://", 1)[-1] == host:
+    from urllib.parse import urlsplit
+
+    # Compare host names only: proxies (nginx $host) drop the port, the browser's Origin keeps it.
+    origin_host = (urlsplit(origin).hostname or "").lower()
+    hosts = {(h.split(":")[0].strip().lower()) for h in (request.headers.get("x-forwarded-host", ""), request.headers.get("host", "")) if h}
+    if origin_host and origin_host in hosts:
         return
     sec = await settings_store.get_group(db, "security")
     if origin not in sec.allowed_origins:

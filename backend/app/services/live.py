@@ -5,9 +5,11 @@ always sees the new state. Delivery is best-effort: pages also load the same dat
 """
 
 import asyncio
+import json
 import logging
 import uuid
 
+import orjson
 import socketio
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,8 +35,15 @@ def _mgr() -> socketio.AsyncRedisManager:
     return _manager
 
 
+def _plain(data: dict) -> dict:
+    """JSON-safe copy: the gateway serialises events with the standard json module (no datetimes, UUIDs, Decimals)."""
+    return orjson.loads(orjson.dumps(data, default=str))
+
+
 async def _emit(room: str, name: str, data: dict) -> None:
+    data = _plain(data)
     if infra().environment == "test":
+        json.dumps(data)  # same serialiser as the gateway: fails the test if an event is not JSON-safe
         SENT.append((room, name, data))
         return
     try:
@@ -70,7 +79,9 @@ def emit_to_room(db: AsyncSession, room: str, name: str, data: dict) -> None:
 
 async def emit_now(room: str, name: str, data: dict, skip_sid: str | None = None) -> None:
     """Ephemeral event (typing, presence): published immediately, never persisted."""
+    data = _plain(data)
     if infra().environment == "test":
+        json.dumps(data)
         SENT.append((room, name, data))
         return
     try:

@@ -38,7 +38,10 @@ export function MessagesPage() {
   const [archived, setArchived] = useState(false);
   const [starting, setStarting] = useState<'direct' | 'group' | null>(null);
   const dq = useDebounced(q);
-  const list = useQuery({ queryKey: ['conversations', dq, archived], queryFn: () => get<Conv[]>(`/api/v1/messages/conversations${qs({ q: dq, archived: archived || undefined })}`) });
+  const { connected } = useLive();
+  // Live updates come over the WebSocket; without it, poll so chat keeps working.
+  const list = useQuery({ queryKey: ['conversations', dq, archived], refetchInterval: connected ? false : 10_000,
+    queryFn: () => get<Conv[]>(`/api/v1/messages/conversations${qs({ q: dq, archived: archived || undefined })}`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ['conversations'] });
   useRoom(null, {
     'message:new': refresh, 'conversation:new': refresh, 'conversation:updated': refresh, 'conversation:read': refresh,
@@ -125,12 +128,13 @@ function ConvRow({ c, active }: { c: Conv; active: boolean }) {
 
 function Thread({ id, onBack }: { id: string; onBack: () => void }) {
   const { user } = useAuth();
-  const { socket } = useLive();
+  const { socket, connected } = useLive();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
   const conv = useQuery({ queryKey: ['conversation', id], queryFn: () => get<Conv>(`/api/v1/messages/conversations/${id}`) });
   const pages = useInfiniteQuery({
+    refetchInterval: connected ? false : 10_000,
     queryKey: ['messages', id], initialPageParam: '',
     queryFn: ({ pageParam }) => api<Page>(`/api/v1/messages/conversations/${id}/messages${pageParam ? `?before=${pageParam}` : ''}`),
     getNextPageParam: (last) => last.meta.before ?? undefined,

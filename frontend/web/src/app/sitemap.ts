@@ -13,3 +13,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...(data?.news ?? []).map((n) => ({ url: `${base}/news/${n.slug}`, lastModified: n.updated_at })),
   ];
 }
+
+// Rendered per request: the API is not reachable while the Docker image is built.
+export const dynamic = 'force-dynamic';

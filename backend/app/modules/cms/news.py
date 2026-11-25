@@ -185,6 +185,10 @@ async def publish_news(
         n.status = "published"
         n.publish_at = body.publish_at.astimezone(UTC) if body.publish_at else B.now()
         verb = "Scheduled" if n.publish_at > B.now() else "Published"
+        if verb == "Published" and n.category == "announcement":
+            from ...services import push
+
+            await push.broadcast(db, n.title, n.summary or "", {"link": f"/portal/news/{n.slug}", "slug": n.slug})
     else:
         n.status, verb = "draft", "Unpublished"
     await record(

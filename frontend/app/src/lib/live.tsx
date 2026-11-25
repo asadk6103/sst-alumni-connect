@@ -29,18 +29,22 @@ export function LiveProvider({ enabled, children }: { enabled: boolean; children
       auth: (cb) => cb({ token: tokenStore.get() }),
     });
     let ping: ReturnType<typeof setInterval> | undefined;
+    let wasConnected = false;
     socket.on('connect', () => {
       retries = 0;
       setState({ socket, connected: true });
+      // Anything that happened while disconnected is fetched again.
+      if (wasConnected) for (const k of ['conversations', 'messages', 'conversation', 'unread', 'notifications', 'feed']) qc.invalidateQueries({ queryKey: [k] });
+      wasConnected = true;
       ping = setInterval(() => socket.emit('presence:ping'), 25_000);
     });
     socket.on('disconnect', () => { clearInterval(ping); setState({ socket, connected: false }); });
     socket.on('connect_error', async (err) => {
-      // Refused by the gateway (expired token) — refresh, then retry with back-off.
-      if (stopped || retries >= 6) return;
+      // Refused (expired token) or unreachable — refresh the token if needed, then retry with back-off (max 30 s), forever.
+      if (stopped) return;
       retries += 1;
       if (err.message === 'unauthenticated') await refreshAccess().catch(() => null);
-      setTimeout(() => { if (!stopped && !socket.connected) socket.connect(); }, 1500 * retries);
+      setTimeout(() => { if (!stopped && !socket.connected) socket.connect(); }, Math.min(30_000, 1500 * retries));
     });
     socket.on('connection:request', (d: { name: string }) => {
       toastRef.current.success(`${d.name} sent you a connection request.`);
@@ -57,9 +61,15 @@ export function LiveProvider({ enabled, children }: { enabled: boolean; children
       toastRef.current[d.approved ? 'success' : 'error'](d.approved ? `Your group “${d.name}” was approved.` : `Your group “${d.name}” was not approved.`);
       qc.invalidateQueries({ queryKey: ['groups'] });
     });
+    // The server ended the connection (e.g. the session was refreshed): socket.io does not retry those by itself.
+    socket.on('disconnect', (reason) => { if (reason === 'io server disconnect' && !stopped) setTimeout(() => socket.connect(), 1500); });
     setState({ socket, connected: false });
     if (tokenStore.get()) socket.connect();
-    return () => { stopped = true; clearInterval(ping); socket.disconnect(); setState({ socket: null, connected: false }); };
+    // Connect as soon as a token is available (first load, after sign-in or refresh).
+    const unsubscribe = tokenStore.subscribe((t) => { if (t && !stopped && !socket.connected && !socket.active) socket.connect(); });
+    const onOnline = () => { if (!stopped && !socket.connected) socket.connect(); };
+    window.addEventListener('online', onOnline);
+    return () => { stopped = true; unsubscribe(); window.removeEventListener('online', onOnline); clearInterval(ping); socket.disconnect(); setState({ socket: null, connected: false }); };
   }, [enabled, qc]);
 
   return <LiveContext.Provider value={state}>{children}</LiveContext.Provider>;

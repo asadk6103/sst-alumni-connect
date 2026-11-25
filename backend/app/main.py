@@ -186,6 +186,7 @@ def create_app() -> FastAPI:
         cms_site.public,
         privacy.router,
         privacy.admin,
+        notifications_api.devices,
     ):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))

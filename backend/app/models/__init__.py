@@ -56,6 +56,7 @@ from .institutional import (
     NewsletterSubscriber,
     Notification,
     NotificationPreference,
+    PushDevice,
     Scholarship,
     ScholarshipAward,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "NavMenu",
     "NewsPost",
     "PrivacyRequest",
+    "PushDevice",
     "Translation",
     "Base",
     "ScholarshipAward",

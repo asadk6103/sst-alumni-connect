@@ -1,7 +1,10 @@
 """Notification centre (the bell) and notification preferences."""
 
+from datetime import UTC, datetime
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -103,6 +106,7 @@ async def preferences(me: Principal = Depends(current_user), db: AsyncSession = 
                 "description": desc,
                 "in_app": stored[k].in_app if k in stored else True,
                 "email": stored[k].email if k in stored else True,
+                "push": stored[k].push if k in stored else True,
             }
             for k, (label, desc) in CATEGORIES.items()
         ]
@@ -113,6 +117,7 @@ class PrefIn(BaseModel):
     category: str
     in_app: bool
     email: bool
+    push: bool | None = None  # mobile app; omitted by older clients = keep
 
 
 @router.put("/preferences", summary="Update your notification preferences")
@@ -123,7 +128,75 @@ async def set_preferences(body: list[PrefIn], me: Principal = Depends(current_us
         row = await db.get(NotificationPreference, (me.id, p.category))
         if row:
             row.in_app, row.email = p.in_app, p.email
+            if p.push is not None:
+                row.push = p.push
         else:
-            db.add(NotificationPreference(user_id=me.id, category=p.category, in_app=p.in_app, email=p.email))
+            db.add(
+                NotificationPreference(
+                    user_id=me.id, category=p.category, in_app=p.in_app, email=p.email, push=True if p.push is None else p.push
+                )
+            )
     await db.flush()
     return await preferences(me, db)
+
+
+# ── mobile devices (push notifications) ─────────────────────────────────────
+devices = APIRouter(prefix="/api/v1/devices", tags=["Mobile devices"])
+
+
+class DeviceIn(BaseModel):
+    token: str = Field(..., min_length=10, max_length=200, pattern=r"^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_\-]+\]$")
+    platform: Literal["android", "ios"]
+    device_name: str | None = Field(None, max_length=120)
+    app_version: str | None = Field(None, max_length=30)
+
+
+@devices.post("", summary="Register this device for push notifications (idempotent)")
+async def register_device(body: DeviceIn, me: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    from ...models import PushDevice
+
+    row = (await db.execute(select(PushDevice).where(PushDevice.token == body.token))).scalar_one_or_none()
+    if row:  # a token moves with the device: the latest signed-in member owns it
+        row.user_id, row.platform, row.device_name, row.app_version = me.id, body.platform, body.device_name, body.app_version
+        row.last_seen_at = datetime.now(UTC)
+    else:
+        db.add(
+            PushDevice(user_id=me.id, token=body.token, platform=body.platform, device_name=body.device_name, app_version=body.app_version)
+        )
+    await db.commit()
+    return {"data": {"ok": True}}
+
+
+@devices.get("", summary="Your devices that receive push notifications")
+async def list_devices(me: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    from ...models import PushDevice
+
+    rows = (await db.execute(select(PushDevice).where(PushDevice.user_id == me.id).order_by(PushDevice.last_seen_at.desc()))).scalars()
+    return {
+        "data": [
+            {
+                "id": str(d.id),
+                "platform": d.platform,
+                "device_name": d.device_name,
+                "app_version": d.app_version,
+                "last_seen_at": d.last_seen_at,
+                "created_at": d.created_at,
+            }
+            for d in rows
+        ]
+    }
+
+
+class TokenOut(BaseModel):
+    token: str = Field(..., max_length=200)
+
+
+@devices.post("/unregister", summary="Stop push notifications on this device (on sign-out)")
+async def unregister_device(body: TokenOut, me: Principal = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete
+
+    from ...models import PushDevice
+
+    await db.execute(delete(PushDevice).where(PushDevice.token == body.token, PushDevice.user_id == me.id))
+    await db.commit()
+    return {"data": {"ok": True}}

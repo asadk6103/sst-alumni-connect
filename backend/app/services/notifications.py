@@ -21,12 +21,14 @@ CATEGORIES: dict[str, tuple[str, str]] = {
     "mentorship": ("Mentorship", "Requests, replies, sessions and feedback."),
     "achievements": ("Achievements", "When your achievement is published."),
     "donations": ("Donations", "Pledges, confirmations and receipts."),
+    "messages": ("Messages", "New private and group messages (mobile app)."),
+    "announcements": ("Announcements", "News and announcements from the alumni office (mobile app)."),
 }
 
 
 async def preference(db: AsyncSession, user_id: uuid.UUID, category: str) -> NotificationPreference:
     pref = await db.get(NotificationPreference, (user_id, category))
-    return pref or NotificationPreference(user_id=user_id, category=category, in_app=True, email=True)
+    return pref or NotificationPreference(user_id=user_id, category=category, in_app=True, email=True, push=True)
 
 
 async def notify(
@@ -49,6 +51,10 @@ async def notify(
         db.add(note)
         await db.flush()
         live.emit_to_user(db, user_id, "notification:new", {"id": note.id, "category": category, "title": note.title, "link": link})
+    if pref.push:
+        from . import push
+
+        await push.queue(db, [user_id], title, body, {"link": link, "kind": kind}, category=category)
     if email and pref.email:
         u = await db.get(User, user_id)
         if u and not u.deleted_at and u.status != "deactivated":

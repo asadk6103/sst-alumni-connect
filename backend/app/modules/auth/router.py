@@ -227,7 +227,7 @@ async def login_mfa(body: MfaLoginIn, request: Request, response: Response, db: 
 @router.post("/refresh", summary="Exchange the refresh cookie for a new access token")
 async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     await svc.check_origin(request, db)
-    if not request.cookies.get(svc.REFRESH_COOKIE):
+    if not svc.presented_refresh(request):
         return {"data": None}  # no session on this browser (anonymous visitor): not an error
     return {"data": await svc.rotate_session(db, request, response)}
 
@@ -235,7 +235,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
 @router.post("/logout", summary="Sign out of this device")
 async def logout(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     await svc.check_origin(request, db)
-    token = request.cookies.get(svc.REFRESH_COOKIE)
+    token = svc.presented_refresh(request)
     if token:
         s = (await db.execute(select(Session).where(Session.refresh_hash == token_hash(token)))).scalar_one_or_none()
         if s and not s.revoked_at:

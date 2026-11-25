@@ -150,3 +150,40 @@ def scheduled_newsletters():
 
 
 __all__ = ["dispatch"]
+
+
+async def _push(db, payload: dict) -> dict:
+    """Send to the Expo Push Service in batches of 100; drop tokens that are no longer registered."""
+    import os
+
+    import httpx
+
+    from .models import PushDevice
+    from .services.push import EXPO_URL, messages
+
+    msgs = messages(payload)
+    headers = {"accept": "application/json", "content-type": "application/json"}
+    if os.environ.get("EXPO_ACCESS_TOKEN"):
+        headers["authorization"] = f"Bearer {os.environ['EXPO_ACCESS_TOKEN']}"
+    dead, sent = [], 0
+    async with httpx.AsyncClient(timeout=15) as client:
+        for i in range(0, len(msgs), 100):
+            chunk = msgs[i : i + 100]
+            r = await client.post(EXPO_URL, json=chunk, headers=headers)
+            r.raise_for_status()
+            for m, ticket in zip(chunk, r.json().get("data", []), strict=False):
+                if ticket.get("status") == "ok":
+                    sent += 1
+                elif (ticket.get("details") or {}).get("error") == "DeviceNotRegistered":
+                    dead.append(m["to"])
+    if dead:
+        await db.execute(delete(PushDevice).where(PushDevice.token.in_(dead)))
+    return {"sent": sent, "removed": len(dead)}
+
+
+@celery_app.task(name="app.tasks.send_push", bind=True, max_retries=3, default_retry_delay=20)
+def send_push(self, payload: dict):
+    try:
+        return _run(_push, payload)
+    except Exception as e:
+        raise self.retry(exc=e, countdown=min(20 * 2**self.request.retries, 600)) from e

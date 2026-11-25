@@ -15,7 +15,7 @@ export type Site = {
 
 export async function getSite(): Promise<Site | null> {
   try {
-    const r = await fetch(`${API}/api/v1/public/site`, { next: { revalidate: 15 } });
+    const r = await fetch(`${API}/api/v1/public/site`, { next: { revalidate: 15 }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     return (await r.json()).data as Site;
   } catch {

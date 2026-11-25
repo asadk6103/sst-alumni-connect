@@ -21,7 +21,7 @@ export type Achievement = { id: string; kind: string; kind_label: string; title:
 /** GET a public API path; returns null on 404 / errors so pages can show "not found" instead of crashing. */
 export async function apiGet<T>(path: string, revalidate = 15): Promise<T | null> {
   try {
-    const r = await fetch(`${API}${path}`, revalidate ? { next: { revalidate } } : { cache: 'no-store' });
+    const r = await fetch(`${API}${path}`, { ...(revalidate ? { next: { revalidate } } : { cache: 'no-store' }), signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     return (await r.json()).data as T;
   } catch {
@@ -31,7 +31,7 @@ export async function apiGet<T>(path: string, revalidate = 15): Promise<T | null
 
 export async function apiPaged<T>(path: string): Promise<{ data: T[]; meta: { page: number; pages: number; total: number } } | null> {
   try {
-    const r = await fetch(`${API}${path}`, { next: { revalidate: 15 } });
+    const r = await fetch(`${API}${path}`, { next: { revalidate: 15 }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     return await r.json();
   } catch {

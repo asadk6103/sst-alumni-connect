@@ -202,9 +202,54 @@ async def send(
         .values(read_at=msg.created_at, delivered_at=msg.created_at)
     )
     out = (await messages_out(db, me.id, [msg]))[0]
-    for uid in await active_member_ids(db, conv_id):
+    members = await active_member_ids(db, conv_id)
+    for uid in members:
         live.emit_to_user(db, uid, "message:new", {"conversation_id": str(conv_id), "message": out})
+    await _push_message(db, me, conv_id, [u for u in members if u != me.id], preview)
     return msg
+
+
+async def _push_message(db: AsyncSession, me: Principal, conv_id: uuid.UUID, recipients: list, preview: str) -> None:
+    """Mobile push for a new message: skipped for muted conversations and members who turned message pushes off."""
+    from ...models import ConversationSetting, NotificationPreference
+    from ...services import push
+
+    if not recipients:
+        return
+    muted = set(
+        (
+            await db.execute(
+                select(ConversationSetting.user_id).where(
+                    ConversationSetting.conversation_id == conv_id,
+                    ConversationSetting.user_id.in_(recipients),
+                    ConversationSetting.muted.is_(True),
+                )
+            )
+        ).scalars()
+    )
+    off = set(
+        (
+            await db.execute(
+                select(NotificationPreference.user_id).where(
+                    NotificationPreference.user_id.in_(recipients),
+                    NotificationPreference.category == "messages",
+                    NotificationPreference.push.is_(False),
+                )
+            )
+        ).scalars()
+    )
+    targets = [u for u in recipients if u not in muted and u not in off]
+    conv = await db.get(Conversation, conv_id)
+    title = f"{me.full_name} · {conv.title}" if conv and conv.title else me.full_name
+    await push.queue(
+        db,
+        targets,
+        title,
+        preview,
+        {"conversation_id": str(conv_id), "link": f"/portal/messages/{conv_id}"},
+        category="messages",
+        collapse=f"conv-{conv_id}",
+    )
 
 
 async def _receipt_floor(db: AsyncSession, conv_id: uuid.UUID, me: uuid.UUID) -> tuple[datetime | None, datetime | None]:
