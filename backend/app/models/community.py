@@ -3,7 +3,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, Timestamps, UUIDPk
@@ -39,7 +40,16 @@ class Post(UUIDPk, Base):
     __tablename__ = "posts"
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("discussion_groups.id", ondelete="CASCADE"))
-    kind: Mapped[str] = mapped_column(String(20), default="post")  # post | announcement | share
+    # post | announcement | share | achievement | article | poll | event | job
+    kind: Mapped[str] = mapped_column(String(20), default="post")
+    # community (everyone who can read the feed / group) | connections (author's connections only)
+    audience: Mapped[str] = mapped_column(String(20), default="community", server_default="community")
+    location: Mapped[str | None] = mapped_column(String(150))
+    feeling: Mapped[str | None] = mapped_column(String(60))
+    topics: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    mentions: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))  # user ids
+    event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("events.id", ondelete="SET NULL"))  # shared event
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("job_posts.id", ondelete="SET NULL"))  # shared job
     title: Mapped[str | None] = mapped_column(String(200))  # forum topics
     body: Mapped[str] = mapped_column(Text, default="")
     shared_post_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("posts.id", ondelete="SET NULL"))
@@ -75,6 +85,8 @@ class Comment(UUIDPk, Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"))
     body: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="published")  # published | hidden | deleted
+    mentions: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    reaction_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -108,4 +120,75 @@ class ModerationAction(Base):
     target_id: Mapped[str] = mapped_column(String(100), index=True)
     action: Mapped[str] = mapped_column(String(20))  # hide | restore | delete | pin | unpin | approve | reject | archive | ban
     reason: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CommentReaction(Base):
+    __tablename__ = "comment_reactions"
+    comment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PostTag(Base):
+    """People tagged in a post (they are notified and the post shows their names)."""
+
+    __tablename__ = "post_tags"
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class SavedPost(Base):
+    __tablename__ = "saved_posts"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class HiddenPost(Base):
+    """'Not interested': the post no longer appears in this member's feed."""
+
+    __tablename__ = "hidden_posts"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PollOption(UUIDPk, Base):
+    __tablename__ = "poll_options"
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(150))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    vote_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Poll(Base):
+    __tablename__ = "polls"
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    question: Mapped[str] = mapped_column(String(300))
+    multiple: Mapped[bool] = mapped_column(Boolean, default=False)
+    closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vote_count: Mapped[int] = mapped_column(Integer, default=0)  # people who voted
+
+
+class PollVote(Base):
+    __tablename__ = "poll_votes"
+    option_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("poll_options.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Invitation(UUIDPk, Base):
+    """An email invitation to join the alumni network, sent by a member."""
+
+    __tablename__ = "invitations"
+    __table_args__ = (UniqueConstraint("inviter_id", "email"),)
+    inviter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    name: Mapped[str | None] = mapped_column(String(150))
+    token: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="sent")  # sent | joined
+    joined_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

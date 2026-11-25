@@ -78,6 +78,7 @@ class Session(UUIDPk, Base):
     last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    persistent: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))  # "Remember me"
 
 
 class LoginAttempt(Base):

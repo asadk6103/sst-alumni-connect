@@ -11,7 +11,7 @@ fi
 if [ -f "$SRC/SHA256SUMS" ]; then (cd "$SRC" && sha256sum -c --quiet SHA256SUMS) || die "Checksum mismatch — the backup is damaged."; fi
 
 step "Stopping application services"
-compose stop nginx frontend api realtime celery-worker celery-beat >/dev/null
+compose stop nginx api realtime celery-worker celery-beat >/dev/null
 
 step "Restoring database"
 compose exec -T postgres psql -U alumni -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS alumni WITH (FORCE)" -c "CREATE DATABASE alumni OWNER alumni" >/dev/null

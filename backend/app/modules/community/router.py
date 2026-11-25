@@ -1,6 +1,7 @@
 """Community for members: feed, posts, reactions, comments, shares, reports and discussion groups."""
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
@@ -24,8 +25,10 @@ from ...models import (
     PostMedia,
     Reaction,
 )
-from ...services import live, media
+from ...services import live, media, notifications
 from . import service as svc
+
+REACTION_KINDS = Literal["like", "love", "celebrate", "insightful", "haha", "support"]
 
 router = APIRouter(prefix="/api/v1/community", tags=["Community"], dependencies=[Depends(require_module("community"))])
 reader = require("portal.react", "community.view", any_of=True)
@@ -38,7 +41,8 @@ def _text(v):
 # ── feed ────────────────────────────────────────────────────────────────────
 @router.get("/feed", summary="Community feed (cursor pagination, newest first)")
 async def feed(
-    filter: Literal["all", "following", "announcements", "mine"] = "all",
+    filter: Literal["all", "following", "batch", "groups", "announcements", "mine"] = "all",
+    sort: Literal["latest", "relevant"] = "latest",
     group_id: uuid.UUID | None = None,
     cursor: str | None = None,
     limit: int = Query(15, ge=1, le=50),
@@ -62,6 +66,18 @@ async def feed(
         stmt = stmt.where(Post.kind == "announcement")
     elif filter == "mine":
         stmt = stmt.where(Post.author_id == p.id)
+    elif filter == "groups":
+        stmt = stmt.where(Post.group_id.in_(await svc.member_group_ids(db, p.id) or [uuid.UUID(int=0)]))
+    elif filter == "batch":
+        from ...models import AlumniProfile
+
+        mine = await db.get(AlumniProfile, p.id)
+        batch_members = select(AlumniProfile.user_id).where(AlumniProfile.batch_id == mine.batch_id) if mine and mine.batch_id else None
+        batch_group = select(DiscussionGroup.id).where(DiscussionGroup.batch_id == mine.batch_id) if mine and mine.batch_id else None
+        if batch_members is None:
+            stmt = stmt.where(Post.id.is_(None))
+        else:
+            stmt = stmt.where(or_(Post.author_id.in_(batch_members), Post.group_id.in_(batch_group)))
     elif filter == "following":
         followed = select(AlumniFollow.followee_id).where(AlumniFollow.follower_id == p.id)
         connected = (
@@ -75,6 +91,21 @@ async def feed(
     if q:
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(or_(func.lower(Post.body).like(like), func.lower(Post.title).like(like)))
+    from ...models import HiddenPost
+
+    stmt = stmt.where(Post.id.not_in(select(HiddenPost.post_id).where(HiddenPost.user_id == p.id)))
+    if sort == "relevant":
+        # engagement with time decay; offset pagination (cursor "o:<offset>")
+        offset = int(cursor[2:]) if cursor and cursor.startswith("o:") and cursor[2:].isdigit() else 0
+        hours = func.extract("epoch", func.now() - Post.created_at) / 3600
+        score = (Post.reaction_count + 2 * Post.comment_count + 3 * Post.share_count + 1) / func.power(hours + 2, 1.5)
+        rows = (await db.execute(stmt.order_by(score.desc(), Post.id.desc()).offset(offset).limit(limit + 1))).scalars().all()
+        more = len(rows) > limit
+        await db.commit()
+        return {
+            "data": await svc.serialize(db, p, list(rows[:limit])),
+            "meta": {"next_cursor": f"o:{offset + limit}" if more else None, "pinned": []},
+        }
     pinned = []
     if not cursor and filter == "all" and not q:
         pinned_rows = (await db.execute(stmt.where(Post.is_pinned.is_(True)).order_by(Post.created_at.desc()).limit(3))).scalars().all()
@@ -95,16 +126,47 @@ async def feed(
 
 
 # ── posts ───────────────────────────────────────────────────────────────────
+class PollIn(BaseModel):
+    question: str = Field(..., min_length=3, max_length=300)
+    options: list[str] = Field(..., min_length=2, max_length=6)
+    multiple: bool = False
+    closes_at: datetime | None = None
+
+    @field_validator("options")
+    @classmethod
+    def _opts(cls, v):
+        v = [o.strip()[:150] for o in v if o.strip()]
+        if len(v) < 2 or len(set(x.lower() for x in v)) != len(v):
+            raise ValueError("Add at least two different options.")
+        return v
+
+
 class PostIn(BaseModel):
-    body: str = Field("", max_length=5000)
+    body: str = Field("", max_length=20000)
     title: str | None = Field(None, max_length=200)
+    kind: Literal["post", "achievement", "article", "poll", "event", "job"] = "post"
     group_id: uuid.UUID | None = None
-    media_ids: list[uuid.UUID] = Field(default_factory=list, max_length=6)
+    audience: Literal["community", "connections"] = "community"
+    media_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
     shared_post_id: uuid.UUID | None = None
     announcement: bool = False
+    poll: PollIn | None = None
+    event_id: uuid.UUID | None = None
+    job_id: uuid.UUID | None = None
+    tagged_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+    mention_ids: list[uuid.UUID] = Field(default_factory=list, max_length=30)
+    location: str | None = Field(None, max_length=150)
+    feeling: str | None = Field(None, max_length=60)
+    topics: list[str] = Field(default_factory=list, max_length=8)
+    draft: bool = False
     client_key: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_\-]+$")
 
-    _t = field_validator("body", "title", mode="before")(_text)
+    _t = field_validator("body", "title", "location", "feeling", mode="before")(_text)
+
+    @field_validator("topics")
+    @classmethod
+    def _topics(cls, v):
+        return list(dict.fromkeys(t.strip().lstrip("#")[:40] for t in v if t.strip()))
 
 
 class PostEdit(BaseModel):
@@ -125,8 +187,30 @@ async def create_post(
     await enforce(f"post:{p.id}", 20, 3600, "You are posting very often. Please wait a little.")
     if body.announcement and not p.can("community.publish"):
         raise forbidden("Only community administrators can publish announcements.")
-    if not body.body and not body.media_ids and not body.shared_post_id:
+    if body.kind == "poll" and not body.poll:
+        raise AppError(422, "VALIDATION_ERROR", "Add the poll question and options.", [{"field": "poll", "message": "Required."}])
+    if body.kind == "article" and not (body.title and len(body.body) >= 50):
+        raise AppError(
+            422, "VALIDATION_ERROR", "An article needs a title and at least 50 characters.", [{"field": "title", "message": "Required."}]
+        )
+    if body.kind == "event" and not body.event_id:
+        raise AppError(422, "VALIDATION_ERROR", "Choose the event to share.", [{"field": "event_id", "message": "Required."}])
+    if body.kind == "job" and not body.job_id:
+        raise AppError(422, "VALIDATION_ERROR", "Choose the job to share.", [{"field": "job_id", "message": "Required."}])
+    if not body.body and not body.media_ids and not body.shared_post_id and body.kind == "post" and not body.draft:
         raise AppError(422, "EMPTY_POST", "Write something or add a photo.", [{"field": "body", "message": "Required."}])
+    if body.event_id:
+        from ...models import Event
+
+        ev = await db.get(Event, body.event_id)
+        if not ev or ev.status != "published":
+            raise not_found("Event")
+    if body.job_id:
+        from ...models import JobPost
+
+        jb = await db.get(JobPost, body.job_id)
+        if not jb or jb.status != "approved":
+            raise not_found("Job")
     group = None
     if body.group_id:
         group = await svc.group_or_404(db, body.group_id)
@@ -151,21 +235,29 @@ async def create_post(
     files = []
     for mid in dict.fromkeys(body.media_ids):
         m = await db.get(Media, mid)
-        if not m or m.deleted_at or m.uploaded_by != p.id or m.folder != "posts" or not m.mime.startswith("image/"):
-            raise AppError(422, "INVALID_MEDIA", "One of the photos is not available. Upload it again.")
+        if not m or m.deleted_at or m.uploaded_by != p.id or m.folder != "posts" or not m.mime.startswith(("image/", "video/")):
+            raise AppError(422, "INVALID_MEDIA", "One of the photos or videos is not available. Upload it again.")
         files.append(m)
     post = Post(
         author_id=p.id,
         group_id=body.group_id,
-        kind="announcement" if body.announcement else "share" if shared else "post",
+        kind="announcement" if body.announcement else "share" if shared else body.kind,
         title=body.title or None,
         body=body.body,
         shared_post_id=shared.id if shared else None,
         client_key=body.client_key,
-        status="published",
+        status="draft" if body.draft else "published",
+        audience="community" if body.group_id else body.audience,
+        location=body.location or None,
+        feeling=body.feeling or None,
+        topics=body.topics,
+        mentions=[str(u) for u in dict.fromkeys(body.mention_ids)],
+        event_id=body.event_id if body.kind == "event" else None,
+        job_id=body.job_id if body.kind == "job" else None,
     )
     db.add(post)
     await db.flush()
+    await _save_extras(db, p, post, body)
     for i, m in enumerate(files):
         db.add(PostMedia(post_id=post.id, media_id=m.id, position=i))
     if shared:
@@ -178,6 +270,9 @@ async def create_post(
         )
     await db.flush()
     await db.refresh(post)
+    if post.status == "draft":
+        return {"data": (await svc.serialize(db, p, [post]))[0]}
+    await _announce_people(db, p, post)
     live.emit_to_room(
         db,
         svc.room_of(post),
@@ -185,6 +280,176 @@ async def create_post(
         {"id": str(post.id), "group_id": str(post.group_id) if post.group_id else None, "author_id": str(p.id), "kind": post.kind},
     )
     return {"data": (await svc.serialize(db, p, [post]))[0]}
+
+
+async def _save_extras(db: AsyncSession, p: Principal, post: Post, body: PostIn) -> None:
+    from ...models import Poll, PollOption, PostTag, User
+
+    if body.kind == "poll" and body.poll:
+        db.add(Poll(post_id=post.id, question=body.poll.question, multiple=body.poll.multiple, closes_at=body.poll.closes_at))
+        for i, label in enumerate(body.poll.options):
+            db.add(PollOption(post_id=post.id, label=label, position=i))
+    people = set(body.tagged_ids) - {p.id}
+    if people:
+        valid = set((await db.execute(select(User.id).where(User.id.in_(people), User.deleted_at.is_(None)))).scalars())
+        for uid in valid:
+            db.add(PostTag(post_id=post.id, user_id=uid))
+    await db.flush()
+
+
+async def _announce_people(db: AsyncSession, p: Principal, post: Post) -> None:
+    """Notify people tagged or @mentioned in a newly published post."""
+    from ...models import PostTag
+
+    tagged = set((await db.execute(select(PostTag.user_id).where(PostTag.post_id == post.id))).scalars())
+    mentioned = {uuid.UUID(m) for m in post.mentions or []}
+    for uid in (tagged | mentioned) - {p.id}:
+        verb = "tagged you in a post" if uid in tagged else "mentioned you in a post"
+        await notifications.notify(
+            db,
+            uid,
+            "community",
+            "post_tag" if uid in tagged else "post_mention",
+            f"{p.full_name} {verb}",
+            body=(post.title or post.body)[:140],
+            link=f"/portal/community/posts/{post.id}",
+            actor_id=p.id,
+        )
+
+
+@router.get("/drafts", summary="Your unpublished drafts")
+async def drafts(p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)):
+    rows = (
+        (await db.execute(select(Post).where(Post.author_id == p.id, Post.status == "draft").order_by(Post.created_at.desc()).limit(50)))
+        .scalars()
+        .all()
+    )
+    return {"data": await svc.serialize(db, p, list(rows))}
+
+
+@router.post("/posts/{post_id}/publish", summary="Publish one of your drafts")
+async def publish_draft(
+    post_id: uuid.UUID, p: Principal = Depends(require("portal.post", "community.publish", any_of=True)), db: AsyncSession = Depends(get_db)
+):
+    post = await db.get(Post, post_id)
+    if not post or post.author_id != p.id or post.status != "draft":
+        raise not_found("Draft")
+    post.status, post.created_at = "published", func.now()
+    await db.flush()
+    await db.refresh(post)
+    await _announce_people(db, p, post)
+    live.emit_to_room(
+        db,
+        svc.room_of(post),
+        "post:new",
+        {"id": str(post.id), "group_id": str(post.group_id) if post.group_id else None, "author_id": str(p.id), "kind": post.kind},
+    )
+    return {"data": (await svc.serialize(db, p, [post]))[0]}
+
+
+@router.put("/posts/{post_id}/save", summary="Save a post for later")
+async def save_post(post_id: uuid.UUID, p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from ...models import SavedPost
+
+    post = await svc.readable_post(db, p, await db.get(Post, post_id))
+    await db.execute(pg_insert(SavedPost).values(user_id=p.id, post_id=post.id).on_conflict_do_nothing())
+    return {"data": {"saved": True}}
+
+
+@router.delete("/posts/{post_id}/save", summary="Remove a post from your saved posts")
+async def unsave_post(post_id: uuid.UUID, p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)):
+    from ...models import SavedPost
+
+    await db.execute(delete(SavedPost).where(SavedPost.user_id == p.id, SavedPost.post_id == post_id))
+    return {"data": {"saved": False}}
+
+
+@router.get("/saved", summary="Your saved posts (newest saved first)")
+async def saved_posts(
+    cursor: str | None = None, limit: int = Query(15, ge=1, le=50), p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)
+):
+    from ...models import SavedPost
+
+    stmt = (
+        select(Post, SavedPost.created_at)
+        .join(SavedPost, (SavedPost.post_id == Post.id) & (SavedPost.user_id == p.id))
+        .where(Post.status == "published")
+    )
+    if c := svc.decode_cursor(cursor):
+        stmt = stmt.where(or_(SavedPost.created_at < c[0], and_(SavedPost.created_at == c[0], Post.id < c[1])))
+    rows = (await db.execute(stmt.order_by(SavedPost.created_at.desc(), Post.id.desc()).limit(limit + 1))).all()
+    visible = []
+    for post, saved_at in rows[:limit]:
+        try:
+            visible.append((await svc.readable_post(db, p, post), saved_at))
+        except AppError:
+            pass
+    more = len(rows) > limit
+    last = rows[limit - 1] if more else None
+    return {
+        "data": await svc.serialize(db, p, [x for x, _ in visible]),
+        "meta": {"next_cursor": svc.encode_cursor(last[1], last[0].id) if last else None},
+    }
+
+
+@router.put("/posts/{post_id}/hide", summary="Not interested — hide this post from your feed")
+async def hide_post(post_id: uuid.UUID, p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from ...models import HiddenPost
+
+    post = await svc.readable_post(db, p, await db.get(Post, post_id))
+    await db.execute(pg_insert(HiddenPost).values(user_id=p.id, post_id=post.id).on_conflict_do_nothing())
+    return {"data": {"hidden": True}}
+
+
+@router.delete("/posts/{post_id}/hide", summary="Undo 'not interested'")
+async def unhide_post(post_id: uuid.UUID, p: Principal = Depends(reader), db: AsyncSession = Depends(get_db)):
+    from ...models import HiddenPost
+
+    await db.execute(delete(HiddenPost).where(HiddenPost.user_id == p.id, HiddenPost.post_id == post_id))
+    return {"data": {"hidden": False}}
+
+
+class VoteIn(BaseModel):
+    option_ids: list[uuid.UUID] = Field(..., min_length=1, max_length=6)
+
+
+@router.put("/posts/{post_id}/vote", summary="Vote in a poll (replaces your previous vote)")
+async def vote(post_id: uuid.UUID, body: VoteIn, p: Principal = Depends(require("portal.react")), db: AsyncSession = Depends(get_db)):
+    from datetime import UTC, datetime
+
+    from ...models import Poll, PollOption, PollVote
+
+    post = await svc.readable_post(db, p, await db.get(Post, post_id))
+    poll = await db.get(Poll, post.id)
+    if not poll or post.status != "published":
+        raise not_found("Poll")
+    if poll.closes_at and poll.closes_at <= datetime.now(UTC):
+        raise conflict("POLL_CLOSED", "This poll is closed.")
+    wanted = list(dict.fromkeys(body.option_ids))
+    if not poll.multiple and len(wanted) > 1:
+        raise AppError(422, "VALIDATION_ERROR", "Choose one option.")
+    valid = set((await db.execute(select(PollOption.id).where(PollOption.post_id == post.id))).scalars())
+    if not set(wanted) <= valid:
+        raise not_found("Option")
+    previous = list((await db.execute(select(PollVote.option_id).where(PollVote.post_id == post.id, PollVote.user_id == p.id))).scalars())
+    if previous:
+        await db.execute(delete(PollVote).where(PollVote.post_id == post.id, PollVote.user_id == p.id))
+        await db.execute(
+            update(PollOption).where(PollOption.id.in_(previous)).values(vote_count=func.greatest(PollOption.vote_count - 1, 0))
+        )
+    else:
+        poll.vote_count += 1
+    for oid in wanted:
+        db.add(PollVote(option_id=oid, user_id=p.id, post_id=post.id))
+    await db.execute(update(PollOption).where(PollOption.id.in_(wanted)).values(vote_count=PollOption.vote_count + 1))
+    await db.flush()
+    out = (await svc.serialize(db, p, [post]))[0]
+    live.emit_to_room(db, svc.room_of(post), "post:updated", {"id": str(post.id)})
+    return {"data": out["poll"]}
 
 
 @router.get("/posts/{post_id}", summary="One post")
@@ -233,7 +498,7 @@ async def delete_post(post_id: uuid.UUID, p: Principal = Depends(reader), db: As
 
 
 class ReactionIn(BaseModel):
-    kind: Literal["like", "love", "celebrate", "support", "insightful"] = "like"
+    kind: REACTION_KINDS = "like"
 
 
 async def _reaction_payload(db: AsyncSession, post: Post) -> dict:
@@ -288,7 +553,20 @@ async def upload(
     db: AsyncSession = Depends(get_db),
 ):
     await enforce(f"post-upload:{p.id}", 60, 3600)
-    m = await media.upload(db, data=await file.read(), filename=file.filename or "photo", folder="posts", images_only=True, actor=p.id)
+    data = await file.read()
+    name = file.filename or "photo"
+    is_video = (file.content_type or "").startswith("video/") or name.lower().rsplit(".", 1)[-1] in ("mp4", "webm", "mov", "m4v")
+    m = await media.upload(
+        db,
+        data=data,
+        filename=name,
+        folder="posts",
+        images_only=not is_video,
+        actor=p.id,
+        extra_types=("mp4", "webm", "mov", "m4v") if is_video else (),
+    )
+    if is_video and not m.mime.startswith("video/"):
+        raise AppError(415, "VIDEO_REQUIRED", "Upload an MP4, WebM or MOV video.")
     pub = await media.to_public(db, m)
     return {"data": {"id": str(m.id), "url": pub["url"], "variants": pub["variants"], "width": m.width, "height": m.height}}
 
@@ -297,6 +575,7 @@ async def upload(
 class CommentIn(BaseModel):
     body: str = Field(..., min_length=1, max_length=2000)
     parent_id: uuid.UUID | None = None
+    mention_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
     _t = field_validator("body", mode="before")(_text)
 
@@ -360,12 +639,90 @@ async def add_comment(
             raise not_found("Comment")
         if parent.parent_id:  # replies stay one level deep
             parent = await db.get(Comment, parent.parent_id)
-    c = Comment(post_id=post.id, author_id=p.id, parent_id=parent.id if parent else None, body=body.body)
+    c = Comment(
+        post_id=post.id,
+        author_id=p.id,
+        parent_id=parent.id if parent else None,
+        body=body.body,
+        mentions=[str(u) for u in dict.fromkeys(body.mention_ids)],
+    )
     db.add(c)
     await db.execute(update(Post).where(Post.id == post.id).values(comment_count=Post.comment_count + 1))
     await db.flush()
     await db.refresh(c)
+    link = f"/portal/community/posts/{post.id}"
+    told = {p.id}
+    for uid in {uuid.UUID(m) for m in c.mentions} - told:
+        await notifications.notify(
+            db,
+            uid,
+            "community",
+            "comment_mention",
+            f"{p.full_name} mentioned you in a comment",
+            body=c.body[:140],
+            link=link,
+            actor_id=p.id,
+        )
+        told.add(uid)
+    if parent and parent.author_id not in told:
+        await notifications.notify(
+            db,
+            parent.author_id,
+            "community",
+            "comment_reply",
+            f"{p.full_name} replied to your comment",
+            body=c.body[:140],
+            link=link,
+            actor_id=p.id,
+        )
+        told.add(parent.author_id)
+    if post.author_id not in told:
+        await notifications.notify(
+            db,
+            post.author_id,
+            "community",
+            "post_comment",
+            f"{p.full_name} commented on your post",
+            body=c.body[:140],
+            link=link,
+            actor_id=p.id,
+        )
     live.emit_to_room(db, svc.room_of(post), "comment:new", {"post_id": str(post.id), "id": str(c.id)})
+    return {"data": (await svc.comments_out(db, p, [c]))[0]}
+
+
+@router.put("/comments/{comment_id}/reaction", summary="React to a comment")
+async def react_comment(
+    comment_id: uuid.UUID, body: ReactionIn, p: Principal = Depends(require("portal.react")), db: AsyncSession = Depends(get_db)
+):
+    from ...models import CommentReaction
+
+    c = await db.get(Comment, comment_id)
+    if not c or c.status != "published":
+        raise not_found("Comment")
+    post = await svc.readable_post(db, p, await db.get(Post, c.post_id))
+    r = await db.get(CommentReaction, (c.id, p.id))
+    if r:
+        r.kind = body.kind
+    else:
+        db.add(CommentReaction(comment_id=c.id, user_id=p.id, kind=body.kind))
+        c.reaction_count += 1
+    await db.flush()
+    live.emit_to_room(db, svc.room_of(post), "comment:updated", {"post_id": str(post.id), "id": str(c.id)})
+    return {"data": (await svc.comments_out(db, p, [c]))[0]}
+
+
+@router.delete("/comments/{comment_id}/reaction", summary="Remove your reaction from a comment")
+async def unreact_comment(comment_id: uuid.UUID, p: Principal = Depends(require("portal.react")), db: AsyncSession = Depends(get_db)):
+    from ...models import CommentReaction
+
+    c = await db.get(Comment, comment_id)
+    if not c:
+        raise not_found("Comment")
+    res = await db.execute(delete(CommentReaction).where(CommentReaction.comment_id == c.id, CommentReaction.user_id == p.id))
+    if res.rowcount:
+        c.reaction_count = max(0, c.reaction_count - 1)
+    await db.flush()
     return {"data": (await svc.comments_out(db, p, [c]))[0]}
 
 

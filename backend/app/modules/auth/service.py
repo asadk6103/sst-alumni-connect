@@ -39,7 +39,8 @@ def check_password_policy(password: str, sec: SecuritySettings) -> None:
         )
 
 
-def set_refresh_cookie(request: Request, response: Response, token: str, max_age: int) -> None:
+def set_refresh_cookie(request: Request, response: Response, token: str, max_age: int | None) -> None:
+    """max_age None = browser-session cookie ("Remember me" unticked)."""
     response.set_cookie(
         REFRESH_COOKIE, token, max_age=max_age, httponly=True, samesite="strict", secure=request.url.scheme == "https", path=COOKIE_PATH
     )
@@ -58,7 +59,7 @@ def clear_refresh_cookie(request: Request, response: Response) -> None:
     response.delete_cookie(REFRESH_COOKIE, path=COOKIE_PATH, httponly=True, samesite="strict", secure=request.url.scheme == "https")
 
 
-async def issue_session(db: AsyncSession, request: Request, response: Response, user: User) -> dict:
+async def issue_session(db: AsyncSession, request: Request, response: Response, user: User, remember: bool = True) -> dict:
     sec: SecuritySettings = await settings_store.get_group(db, "security")  # type: ignore[assignment]
     refresh = random_token(48)
     session = Session(
@@ -67,6 +68,7 @@ async def issue_session(db: AsyncSession, request: Request, response: Response, 
         user_agent=(request.headers.get("user-agent") or "")[:300],
         ip=client_ip(request),
         expires_at=now() + timedelta(minutes=sec.session_idle_minutes),
+        persistent=remember,
     )
     db.add(session)
     user.last_login_at = now()
@@ -75,7 +77,7 @@ async def issue_session(db: AsyncSession, request: Request, response: Response, 
     if is_mobile(request):
         out["refresh_token"] = refresh
     else:
-        set_refresh_cookie(request, response, refresh, sec.session_idle_minutes * 60)
+        set_refresh_cookie(request, response, refresh, sec.session_idle_minutes * 60 if remember else None)
     return out
 
 
@@ -119,7 +121,7 @@ async def rotate_session(db: AsyncSession, request: Request, response: Response)
     if is_mobile(request):
         out["refresh_token"] = new_token
     else:
-        set_refresh_cookie(request, response, new_token, int((session.expires_at - now()).total_seconds()))
+        set_refresh_cookie(request, response, new_token, int((session.expires_at - now()).total_seconds()) if session.persistent else None)
     return out
 
 

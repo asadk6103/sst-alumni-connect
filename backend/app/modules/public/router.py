@@ -30,7 +30,9 @@ async def _site_payload(db: AsyncSession) -> dict:
             if m and not m.deleted_at:
                 assets[f] = await media.to_public(db, m)
     sec = await settings_store.get_group(db, "security")
+    alumni_cfg = await settings_store.get_group(db, "alumni")
     return {
+        "terms_url": alumni_cfg.terms_url,
         "installed": await settings_store.is_installed(db),
         "app_name": general.app_name,
         "app_description": general.app_description,

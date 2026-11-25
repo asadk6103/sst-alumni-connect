@@ -3,7 +3,6 @@
 ```mermaid
 flowchart LR
   B[Browser] -->|HTTP / WebSocket| N[nginx]
-  N -->|/| W[frontend<br/>Next.js public site]
   N -->|/login /setup /portal /admin| S[(portal & admin SPA<br/>static, in nginx)]
   N -->|/api| A1[api ×N<br/>FastAPI]
   N -->|/realtime| R1[realtime ×N<br/>Socket.IO]

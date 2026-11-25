@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-25 · Current stage: **Web platform complete** (Stages 1–6) · next: mobile app
+Last updated: 2026-11-25 · Current stage: **Portal redesign — phase 1 of 6 done** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -16,6 +16,24 @@ Last updated: 2026-11-25 · Current stage: **Web platform complete** (Stages 1�
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
 payments on hold, generic HTTP SMS provider, students both self-register and are imported, p95 latency
 budget 200 ms for API reads.
+
+## Portal redesign (from the supplied designs, `docs/design/REDESIGN_NOTES.md`)
+Decisions: sign-in page is the landing page (`/`), everyone lands on the Feed; the public Next.js website is removed
+(portal only — CMS pages, menus and the website contact form are no longer served; News stays in the portal);
+Google / Microsoft sign-in buttons hidden; voice / video call buttons hidden; every feature shown is built for real.
+
+**Phase 1 (done)** — new login design (Remember me = browser-session sign-in when unticked); new portal shell (navy top
+bar with global search over alumni / posts / communities / events, icon tabs, left sidebar with area-specific promo card,
+mobile drawer); Feed page (greeting, composer, All / Following / My Batch / Groups tabs, Latest / Most relevant sort,
+profile card, upcoming events, groups, people you may know); Create Post modal (Post, Achievement, Event, Job, Poll,
+Article; share with community / connections / a group; photos and videos; tag people; location; feeling; topics; save as
+draft); posts with six reactions + who-reacted panel, polls (single / multiple choice, closing date, change vote),
+shared events / jobs, connections-only audience, saved posts, "not interested", drafts; comments with nested replies,
+@mentions (notified), comment reactions, emoji; Invite Alumni (emails or CSV / vCard import, inviter notified on join).
+Migration `0009_feed`. Tests: 55 backend; browser walk-through `e2e-redesign-1.mjs` passes (desktop + 390 px).
+
+Next phases: 2 Network / Find Alumni / Directory / Profile · 3 Communities · 4 Events / Jobs / Mentorship ·
+5 Resources hub + Messages · 6 Settings (all sections), support tickets and FAQs.
 
 ## Completed (Stage 6 — Production readiness)
 

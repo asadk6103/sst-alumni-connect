@@ -103,6 +103,9 @@ async def register(body: RegisterIn, request: Request, db: AsyncSession = Depend
     await db.flush()
     await svc.refresh_match(db, user, profile)
     await svc.log(db, user.id, "submitted", note="Registered online.")
+    from ..community.invitations import mark_joined
+
+    await mark_joined(db, user, body.invite)
     await svc.refresh_search(db, user.id)
     if verify_email:
         from ..auth.router import send_email_verification

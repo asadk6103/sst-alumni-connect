@@ -79,7 +79,7 @@ async def test_injection_payloads_are_inert(client, installed):
             (f"/api/v1/alumni/directory?q={p}", auth(tok)),
             (f"/api/v1/admin/users?q={p}", h),
             (f"/api/v1/admin/audit-logs?q={p}", h),
-            (f"/api/v1/public/news?q={p}", {}),
+            (f"/api/v1/news?q={p}", auth(tok)),
             (f"/api/v1/jobs?q={p}", auth(tok)),
         ):
             r = await client.get(url, headers=headers)

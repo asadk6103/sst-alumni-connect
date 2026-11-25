@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { UserX, Activity, BarChart3, Inbox, LayoutTemplate, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
+import { UserX, Activity, BarChart3, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
   X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
@@ -25,9 +25,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/donations', label: 'Donations & Scholarships', icon: HandHeart, perms: ['donations.view', 'scholarships.view'] },
   { to: '/admin/gallery', label: 'Gallery', icon: Images, perms: ['gallery.view'] },
   { to: '/admin/newsletters', label: 'Newsletters', icon: Newspaper, perms: ['communications.view'] },
-  { to: '/admin/pages', label: 'Website Pages', icon: LayoutTemplate, perms: ['cms.view', 'navigation.view'] },
   { to: '/admin/news', label: 'News & Announcements', icon: Megaphone, perms: ['news.view'] },
-  { to: '/admin/website/messages', label: 'Website Messages', icon: Inbox, perms: ['communications.view'] },
   { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3, perms: ['reports.view'] },
   { to: '/admin/custom-fields', label: 'Custom Fields', icon: ListPlus, perms: ['custom_fields.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },
@@ -36,7 +34,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/media', label: 'Media Library', icon: ImageIcon, perms: ['media.view'] },
   { to: '/admin/communications', label: 'Communication Center', icon: Mail, perms: ['communications.view'] },
   { to: '/admin/configuration', label: 'System Configuration', icon: Settings,
-    perms: ['settings.view', 'branding.view', 'integrations.view', 'modules.view', 'feature_flags.view', 'donations.view', 'cms.view'] },
+    perms: ['settings.view', 'branding.view', 'integrations.view', 'modules.view', 'feature_flags.view', 'donations.view'] },
   { to: '/admin/audit', label: 'Audit Logs', icon: FileClock, perms: ['audit.view'] },
   { to: '/admin/health', label: 'System Health', icon: Activity, perms: ['health.view'] },
 ];

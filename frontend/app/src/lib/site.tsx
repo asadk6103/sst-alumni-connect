@@ -22,7 +22,7 @@ export type Site = {
   contact_email: string | null; contact_phone: string | null; address: string | null; default_language: string;
   timezone: string; date_format: string; time_format: string; currency: string; branding: Branding;
   branding_version: number; assets: Partial<Record<keyof Branding, MediaItem>>; modules: Record<string, boolean>;
-  features: Record<string, boolean>;
+  features: Record<string, boolean>; terms_url?: string | null;
   auth: { require_email_verification: boolean; require_phone_verification: boolean; min_password_length: number;
     require_uppercase: boolean; require_lowercase: boolean; require_digit: boolean; require_symbol: boolean };
 };

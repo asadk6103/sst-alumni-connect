@@ -3,78 +3,13 @@
 import io
 import re
 import zipfile
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from app import worker
 from app.i18n import CATALOG
 
 from .conftest import auth
-from .test_alumni import PW, _member
+from .test_alumni import PW
 from .test_community import _verified
-
-
-async def test_cms_pages_draft_publish_schedule_preview(client, installed):
-    h = auth(installed)
-    # seeded About page is live
-    about = (await client.get("/api/v1/public/pages/about")).json()["data"]
-    assert about["blocks"][0]["type"] == "hero" and about["blocks"][2]["type"] == "stats"
-    assert about["blocks"][2]["items"][0]["value"] != ""  # live figure filled in
-
-    bad = {"title": "Bad", "slug": "bad-page", "blocks": [{"type": "cta", "heading": "Go", "button_url": "javascript:alert(1)"}]}
-    r = await client.post("/api/v1/admin/cms/pages", headers=h, json=bad)
-    assert r.status_code == 422 and r.json()["error"]["details"][0]["field"] == "blocks.0.button_url"
-    assert (await client.post("/api/v1/admin/cms/pages", headers=h, json={**bad, "slug": "news", "blocks": []})).status_code == 422
-
-    body = {
-        "title": "Reunion 2026",
-        "slug": "reunion-2026",
-        "seo_description": "Grand reunion",
-        "blocks": [
-            {"type": "rich_text", "heading": "Welcome", "text": "**Bold** <script>x</script>"},
-            {"type": "events", "heading": "Upcoming", "limit": 3},
-            {"type": "newsletter", "heading": "Stay in touch"},
-        ],
-    }
-    page = (await client.post("/api/v1/admin/cms/pages", headers=h, json=body)).json()["data"]
-    assert page["status"] == "draft" and len(page["blocks"]) == 3 and page["blocks"][0]["id"]
-    assert (await client.get("/api/v1/public/pages/reunion-2026")).status_code == 404  # drafts are not public
-
-    tok = (await client.post(f"/api/v1/admin/cms/pages/{page['id']}/preview-token", headers=h)).json()["data"]["token"]
-    prev = (await client.get(f"/api/v1/public/preview?token={tok}")).json()["data"]
-    html = prev["blocks"][0]["html"]
-    assert "<strong>Bold</strong>" in html and "<script>" not in html and "&lt;script&gt;" in html
-    assert (await client.get("/api/v1/public/preview?token=nope")).status_code == 401
-
-    await client.post(f"/api/v1/admin/cms/pages/{page['id']}/publish", headers=h, json={})
-    live = (await client.get("/api/v1/public/pages/reunion-2026")).json()["data"]
-    assert live["seo_description"] == "Grand reunion" and [b["type"] for b in live["blocks"]] == ["rich_text", "events", "newsletter"]
-
-    # editing the draft does not change the live page until published again
-    body2 = {**body, "title": "Reunion 2026 — updated", "blocks": body["blocks"][:1]}
-    saved = (await client.put(f"/api/v1/admin/cms/pages/{page['id']}", headers=h, json=body2)).json()["data"]
-    assert saved["has_unpublished_changes"]
-    settings_cache_clear()
-    assert len((await client.get("/api/v1/public/pages/reunion-2026")).json()["data"]["blocks"]) == 3
-
-    # schedule for the future → not visible yet
-    later = (datetime.now(UTC) + timedelta(days=2)).isoformat()
-    sched = (await client.post(f"/api/v1/admin/cms/pages/{page['id']}/publish", headers=h, json={"publish_at": later})).json()["data"]
-    assert sched["status"] == "scheduled"
-    settings_cache_clear()
-    assert (await client.get("/api/v1/public/pages/reunion-2026")).status_code == 404
-
-    # home page setting + protection
-    web = (await client.get("/api/v1/admin/config/settings/website", headers=h)).json()["data"]
-    assert (await client.put("/api/v1/admin/config/settings/website", headers=h, json={**web, "home_page": "about"})).status_code == 200
-    assert (await client.get("/api/v1/public/home")).json()["data"]["slug"] == "about"
-    about_id = next(p["id"] for p in (await client.get("/api/v1/admin/cms/pages", headers=h)).json()["data"] if p["slug"] == "about")
-    assert (await client.delete(f"/api/v1/admin/cms/pages/{about_id}", headers=h)).status_code == 422
-    await client.put("/api/v1/admin/config/settings/website", headers=h, json={**web, "home_page": None})
-
-    # a member cannot use the page builder
-    tok_m, _ = await _member(client, "cms-member@example.org", "Cms Member")
-    assert (await client.get("/api/v1/admin/cms/pages", headers=auth(tok_m))).status_code == 403
 
 
 def settings_cache_clear():
@@ -83,7 +18,8 @@ def settings_cache_clear():
     settings_store._cache.clear()
 
 
-async def test_news_navigation_and_contact(client, installed):
+async def test_news_for_members(client, installed):
+    """News, announcements and success stories are published to the portal (the public website was removed)."""
     h = auth(installed)
     n = (
         await client.post(
@@ -98,45 +34,12 @@ async def test_news_navigation_and_contact(client, installed):
         )
     ).json()["data"]
     assert n["slug"] == "scholarship-winners-announced" and n["status"] == "draft"
-    assert not (await client.get("/api/v1/public/news")).json()["data"]
-    await client.post(f"/api/v1/admin/news/{n['id']}/publish", headers=h, json={"publish": True})
-    art = (await client.get(f"/api/v1/public/news/{n['slug']}")).json()["data"]
-    assert "<h3" in art["html"] and "body" in art and art["body"] is None  # raw source is staff-only
-    members = (await client.post("/api/v1/admin/news", headers=h, json={"title": "Members only note", "members_only": True})).json()["data"]
-    await client.post(f"/api/v1/admin/news/{members['id']}/publish", headers=h, json={"publish": True})
-    assert all(x["slug"] != members["slug"] for x in (await client.get("/api/v1/public/news")).json()["data"])
     tok, _ = await _verified(client, installed, "news-reader@example.org", "News Reader", 2010)
-    assert any(x["slug"] == members["slug"] for x in (await client.get("/api/v1/news", headers=auth(tok))).json()["data"])
-
-    # navigation: page link only appears while the page is published
-    menus = (await client.get("/api/v1/admin/website/navigation", headers=h)).json()
-    assert any(i["target"] == "about" for i in menus["data"]["header"])
-    items = [
-        {"label": "Home", "labels": {"ur": "ہوم"}, "type": "route", "target": "/"},
-        {"label": "About", "type": "page", "target": "about", "children": [{"label": "Contact", "type": "route", "target": "/contact"}]},
-        {"label": "School site", "type": "url", "target": "https://example.org", "new_tab": True},
-    ]
-    assert (await client.put("/api/v1/admin/website/navigation/header", headers=h, json=items)).status_code == 200
-    bad = [{"label": "Evil", "type": "url", "target": "javascript:alert(1)"}]
-    assert (await client.put("/api/v1/admin/website/navigation/header", headers=h, json=bad)).status_code == 422
-    site = (await client.get("/api/v1/public/website?lang=ur")).json()["data"]
-    assert (
-        site["header"][0]["label"] == "ہوم"
-        and site["header"][1]["href"] == "/about"
-        and site["header"][1]["children"][0]["href"] == "/contact"
-    )
-
-    # contact form: stored, emailed to the office, honeypot, rate limit
-    worker.TEST_OUTBOX.clear()
-    msg = {"name": "Visitor", "email": "visitor@example.org", "subject": "Reunion", "message": "When is the next reunion?"}
-    assert (await client.post("/api/v1/public/contact", json=msg)).status_code == 201
-    assert any(p.get("subject", "").startswith("Website message") for name, p in worker.TEST_OUTBOX if name == "app.tasks.send_email")
-    await client.post("/api/v1/public/contact", json={**msg, "website": "http://spam"})  # silently dropped
-    inbox = (await client.get("/api/v1/admin/website/messages", headers=h)).json()
-    assert inbox["meta"]["new"] == 1 and inbox["data"][0]["subject"] == "Reunion"
-    for _ in range(4):
-        await client.post("/api/v1/public/contact", json=msg)
-    assert (await client.post("/api/v1/public/contact", json=msg)).status_code == 429
+    assert not (await client.get("/api/v1/news", headers=auth(tok))).json()["data"]
+    await client.post(f"/api/v1/admin/news/{n['id']}/publish", headers=h, json={"publish": True})
+    art = (await client.get(f"/api/v1/news/{n['slug']}", headers=auth(tok))).json()["data"]
+    assert "<h3" in art["html"] and art["body"] is None  # raw source is staff-only
+    assert (await client.get("/api/v1/public/news")).status_code == 404  # no public website any more
 
 
 async def test_custom_fields_registration_profile_and_visibility(client, installed):

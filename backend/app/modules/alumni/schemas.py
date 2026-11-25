@@ -63,6 +63,7 @@ class RegisterIn(SchoolFields, PresentFields):
     password: str = Field(..., min_length=1, max_length=256)
     accept_terms: bool = False
     custom_fields: dict = Field(default_factory=dict)
+    invite: str | None = Field(None, max_length=64)
 
     _n = field_validator("full_name", mode="before")(_clean)
 

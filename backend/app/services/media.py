@@ -101,6 +101,7 @@ async def upload(
     images_only: bool = False,
     actor=None,
     private: bool = False,
+    extra_types: tuple[str, ...] = (),
 ) -> Media:
     sec = await settings_store.get_group(db, "security")
     if len(data) > sec.max_upload_mb * 1024 * 1024:
@@ -111,7 +112,8 @@ async def upload(
     is_image = mime in IMAGE_MIMES
     if images_only and not is_image:
         raise AppError(415, "IMAGE_REQUIRED", "Please upload an image (JPG, PNG, WebP, GIF or ICO).")
-    if ext not in sec.allowed_file_types and not (is_image and ext in ("jpg", "jpeg", "png", "webp", "gif", "ico") and images_only):
+    web_image = is_image and ext in ("jpg", "jpeg", "png", "webp", "gif", "ico") and images_only
+    if ext not in sec.allowed_file_types and ext not in extra_types and not web_image:
         raise AppError(415, "FILE_TYPE_NOT_ALLOWED", f".{ext} files are not allowed.")
     width = height = None
     variants_raw: list[tuple[int, bytes, int]] = []

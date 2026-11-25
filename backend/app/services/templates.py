@@ -383,3 +383,17 @@ DEFAULT_TEMPLATES += [
         ["name", "email", "phone", "subject", "message", "link"],
     ),
 ]
+
+DEFAULT_TEMPLATES += [
+    _t(
+        "invite.alumni",
+        "Invitation to join",
+        "{{inviter}} invited you to join {{app_name}}",
+        "<p>Hello,</p><p><strong>{{inviter}}</strong> invited you to join <strong>{{app_name}}</strong>, the network of former students.</p>"
+        '<blockquote style="white-space:pre-wrap">{{message}}</blockquote>'
+        "<p>Reconnect with classmates, find events, jobs and mentors, and stay in touch with the school.</p>"
+        + _btn("Join the network")
+        + "<p>If you are not a former student, ignore this email.</p>",
+        ["inviter", "message", "link"],
+    ),
+]

@@ -10,7 +10,7 @@ from ...core import settings_store
 from ...core.db import get_db
 from ...core.deps import Principal, require
 from ...core.settings_schemas import DASHBOARD_WIDGETS, DashboardSettings
-from ...models import Achievement, AlumniConnection, AlumniProfile, Event, JobPost, Mentor, Post, User
+from ...models import Achievement, AlumniConnection, AlumniProfile, Event, EventRegistration, GroupMember, JobPost, Mentor, Post, User
 from . import service as svc
 
 router = APIRouter(prefix="/api/v1/alumni", tags=["Alumni portal"])
@@ -178,6 +178,19 @@ async def dashboard(me: Principal = Depends(require("portal.access")), db: Async
         "next_steps": missing[:4],
         "phone_verified": bool(user.phone_verified_at),
         "phone_verification_required": sec.require_phone_verification,
+        "connections": len(await svc.connected_ids(db, user.id)),
+        "groups": (
+            await db.execute(
+                select(func.count()).select_from(GroupMember).where(GroupMember.user_id == user.id, GroupMember.status == "active")
+            )
+        ).scalar_one(),
+        "events": (
+            await db.execute(
+                select(func.count())
+                .select_from(EventRegistration)
+                .where(EventRegistration.user_id == user.id, EventRegistration.status.in_(("registered", "attended")))
+            )
+        ).scalar_one(),
     }
     if {"stats", "by_country", "by_year"} & set(widgets):
         data["stats"] = await community_stats(db)

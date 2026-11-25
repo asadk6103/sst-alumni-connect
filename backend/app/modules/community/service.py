@@ -4,7 +4,7 @@ import base64
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,6 +119,11 @@ async def readable_post(db: AsyncSession, p: Principal, post: Post | None) -> Po
             raise not_found("Post")
     elif not (staff or p.can("portal.react")):
         raise forbidden()
+    if post.audience == "connections" and post.author_id != p.id and not staff:
+        if post.author_id not in await alumni.connected_ids(db, p.id, [post.author_id]):
+            raise not_found("Post")
+    if post.status == "draft" and post.author_id != p.id:
+        raise not_found("Post")
     return post
 
 
@@ -213,6 +218,15 @@ async def serialize(db: AsyncSession, p: Principal, posts: list[Post], with_shar
             for g in (await db.execute(select(DiscussionGroup).where(DiscussionGroup.id.in_(gids)))).scalars()
         }
     moderator = p.can("community.edit")
+    from ...models import PostTag, SavedPost
+
+    polls = await _polls(db, ids, p.id)
+    events, jobs = await _attachments(db, p, posts)
+    saved = set((await db.execute(select(SavedPost.post_id).where(SavedPost.user_id == p.id, SavedPost.post_id.in_(ids)))).scalars())
+    tags: dict = {}
+    for pid, uid in (await db.execute(select(PostTag.post_id, PostTag.user_id).where(PostTag.post_id.in_(ids)))).all():
+        tags.setdefault(pid, []).append(uid)
+    tagged_people = await authors(db, {u for v in tags.values() for u in v} | {uuid.UUID(m) for x in posts for m in (x.mentions or [])})
     out = []
     for x in posts:
         out.append(
@@ -238,14 +252,47 @@ async def serialize(db: AsyncSession, p: Principal, posts: list[Post], with_shar
                 "edited_at": x.edited_at,
                 "can_edit": x.author_id == p.id,
                 "can_delete": x.author_id == p.id or moderator,
+                "audience": x.audience,
+                "location": x.location,
+                "feeling": x.feeling,
+                "topics": x.topics or [],
+                "tagged": [tagged_people[u] for u in tags.get(x.id, []) if u in tagged_people],
+                "mentions": [tagged_people[uuid.UUID(m)] for m in (x.mentions or []) if uuid.UUID(m) in tagged_people],
+                "poll": polls.get(x.id),
+                "event": events.get(x.event_id) if x.event_id else None,
+                "job": jobs.get(x.job_id) if x.job_id else None,
+                "saved": x.id in saved,
             }
         )
     return out
 
 
 async def comments_out(db: AsyncSession, p: Principal, rows: list[Comment]) -> list[dict]:
-    people = await authors(db, {c.author_id for c in rows})
+    from ...models import CommentReaction
+
+    people = await authors(db, {c.author_id for c in rows} | {uuid.UUID(m) for c in rows for m in (c.mentions or [])})
     moderator = p.can("community.edit")
+    ids = [c.id for c in rows]
+    counts: dict = {}
+    mine: dict = {}
+    if ids:
+        for cid, kind, n in (
+            await db.execute(
+                select(CommentReaction.comment_id, CommentReaction.kind, func.count())
+                .where(CommentReaction.comment_id.in_(ids))
+                .group_by(CommentReaction.comment_id, CommentReaction.kind)
+            )
+        ).all():
+            counts.setdefault(cid, {})[kind] = n
+        mine = dict(
+            (
+                await db.execute(
+                    select(CommentReaction.comment_id, CommentReaction.kind).where(
+                        CommentReaction.comment_id.in_(ids), CommentReaction.user_id == p.id
+                    )
+                )
+            ).all()
+        )
     return [
         {
             "id": str(c.id),
@@ -258,6 +305,10 @@ async def comments_out(db: AsyncSession, p: Principal, rows: list[Comment]) -> l
             "edited_at": c.edited_at,
             "can_edit": c.author_id == p.id and c.status == "published",
             "can_delete": (c.author_id == p.id or moderator) and c.status != "deleted",
+            "mentions": [people[uuid.UUID(m)] for m in (c.mentions or []) if uuid.UUID(m) in people],
+            "reactions": counts.get(c.id, {}),
+            "reaction_count": sum(counts.get(c.id, {}).values()),
+            "my_reaction": mine.get(c.id),
         }
         for c in rows
     ]
@@ -288,6 +339,89 @@ async def group_out(db: AsyncSession, p: Principal, g: DiscussionGroup, my: Grou
     }
 
 
+def connected_subq(user_id: uuid.UUID):
+    """Ids of a member's accepted connections (SQL subquery)."""
+    from ...models import AlumniConnection as C
+
+    return (
+        select(C.addressee_id)
+        .where(C.requester_id == user_id, C.status == "accepted")
+        .union(select(C.requester_id).where(C.addressee_id == user_id, C.status == "accepted"))
+    )
+
+
 def feed_scope(p: Principal, group_ids: list[uuid.UUID]):
-    """Main feed = posts outside groups + posts in the member's groups."""
-    return or_(Post.group_id.is_(None), Post.group_id.in_(group_ids or [uuid.UUID(int=0)]))
+    """Main feed = posts outside groups + posts in the member's groups; connections-only posts for connections."""
+    where = or_(Post.group_id.is_(None), Post.group_id.in_(group_ids or [uuid.UUID(int=0)]))
+    audience = or_(Post.audience == "community", Post.author_id == p.id, Post.author_id.in_(connected_subq(p.id)))
+    return and_(where, audience)
+
+
+async def _polls(db: AsyncSession, post_ids: list[uuid.UUID], me: uuid.UUID) -> dict:
+    from ...models import Poll, PollOption, PollVote
+
+    polls = {x.post_id: x for x in (await db.execute(select(Poll).where(Poll.post_id.in_(post_ids)))).scalars()}
+    if not polls:
+        return {}
+    opts: dict = {}
+    for o in (await db.execute(select(PollOption).where(PollOption.post_id.in_(polls)).order_by(PollOption.position))).scalars():
+        opts.setdefault(o.post_id, []).append(o)
+    mine: dict = {}
+    for pid, oid in (
+        await db.execute(select(PollVote.post_id, PollVote.option_id).where(PollVote.post_id.in_(polls), PollVote.user_id == me))
+    ).all():
+        mine.setdefault(pid, []).append(str(oid))
+    out = {}
+    from datetime import UTC, datetime
+
+    for pid, poll in polls.items():
+        total = sum(o.vote_count for o in opts.get(pid, [])) or 0
+        closed = bool(poll.closes_at and poll.closes_at <= datetime.now(UTC))
+        out[pid] = {
+            "question": poll.question,
+            "multiple": poll.multiple,
+            "closes_at": poll.closes_at,
+            "closed": closed,
+            "voters": poll.vote_count,
+            "my_votes": mine.get(pid, []),
+            "options": [
+                {"id": str(o.id), "label": o.label, "votes": o.vote_count, "percent": round(100 * o.vote_count / total) if total else 0}
+                for o in opts.get(pid, [])
+            ],
+        }
+    return out
+
+
+async def _attachments(db: AsyncSession, p: Principal, posts: list[Post]) -> tuple[dict, dict]:
+    """Shared event and job cards (only what the viewer may see)."""
+    from ...models import Event, JobPost
+    from ..events.service import image
+
+    events, jobs = {}, {}
+    for e in (
+        await db.execute(
+            select(Event).where(Event.id.in_({x.event_id for x in posts if x.event_id} or {uuid.UUID(int=0)}), Event.status == "published")
+        )
+    ).scalars():
+        events[e.id] = {
+            "id": str(e.id),
+            "title": e.title,
+            "kind": e.kind,
+            "starts_at": e.starts_at,
+            "venue": e.venue,
+            "is_online": e.is_online,
+            "banner": await image(db, e.banner_id),
+        }
+    for j in (
+        await db.execute(
+            select(JobPost).where(JobPost.id.in_({x.job_id for x in posts if x.job_id} or {uuid.UUID(int=0)}), JobPost.status == "approved")
+        )
+    ).scalars():
+        jobs[j.id] = {
+            "id": str(j.id),
+            "title": j.title,
+            "organization": j.organization,
+            "employment_type": j.employment_type,
+            "location": j.location,
+        }
+    return events, jobs

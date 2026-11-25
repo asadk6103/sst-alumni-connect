@@ -62,3 +62,4 @@ package = false
 "alembic/versions/*" = ["E501"]  # generated DDL
 "app/services/exports.py" = ["E501"]  # OOXML namespace strings
 "app/modules/cms/seed.py" = ["E501"]  # starter copy
+"app/modules/community/*.py" = ["E501"]  # long query chains

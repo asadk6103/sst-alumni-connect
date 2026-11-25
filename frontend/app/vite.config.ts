@@ -6,7 +6,6 @@ import { fileURLToPath, URL } from 'node:url';
 // In production nginx serves the build; in development the API runs on API_PROXY_TARGET.
 const api = process.env.API_PROXY_TARGET ?? 'http://localhost:8100';
 const realtime = process.env.REALTIME_PROXY_TARGET ?? 'http://localhost:8101';
-const web = process.env.WEB_PROXY_TARGET ?? 'http://localhost:3000'; // public website (page previews)
 
 export default defineConfig({
   plugins: [react()],
@@ -18,8 +17,6 @@ export default defineConfig({
       '/api': { target: api, changeOrigin: false },
       '/media': { target: api, changeOrigin: false },
       '/realtime': { target: realtime, ws: true, changeOrigin: false },
-      '/preview': { target: web, changeOrigin: false },
-      '/_next': { target: web, changeOrigin: false },
     },
   },
 });

@@ -6,7 +6,6 @@
 |---|---|---|
 | REST API, background tasks, real-time gateway | `backend/` | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Celery, python-socketio |
 | Portal, administration, sign-in, setup wizard | `frontend/app/` | React 18, TypeScript, Vite, Tailwind, shadcn-style components (Radix), Lucide |
-| Public website | `frontend/web/` | Next.js 15 (server-rendered) |
 | Deployment | `docker-compose*.yml`, `docker/`, `infrastructure/` | Docker Compose, nginx, PostgreSQL 16, Redis 7, MinIO |
 
 Development status and stage plan: [DEVELOPMENT_PROGRESS.md](DEVELOPMENT_PROGRESS.md).
@@ -48,5 +47,4 @@ cd backend && uv sync && uv run alembic upgrade head && uv run python -m app.boo
 uv run uvicorn app.main:app --port 8100 --reload      # API (needs PostgreSQL + Redis, see backend/.env)
 uv run pytest -q                                      # tests (TEST_DATABASE_URL)
 cd frontend/app && npm ci && npm run dev              # portal/admin on http://localhost:5173
-cd frontend/web && npm ci && npm run dev              # public website on http://localhost:3000
 ```

@@ -30,9 +30,8 @@ from .modules.alumni import records as alumni_records
 from .modules.alumni import registration as alumni_registration
 from .modules.auth.router import router as auth_router
 from .modules.cms import news as news_api
-from .modules.cms import pages as cms_pages
-from .modules.cms import site as cms_site
 from .modules.community import admin as community_admin
+from .modules.community import invitations, search
 from .modules.community import router as community
 from .modules.configuration.router import router as config_router
 from .modules.events import router as events
@@ -177,16 +176,13 @@ def create_app() -> FastAPI:
         localization.public,
         localization.admin,
         reports.router,
-        cms_pages.admin,
-        cms_pages.public,
         news_api.admin,
-        news_api.public,
         news_api.router,
-        cms_site.admin,
-        cms_site.public,
         privacy.router,
         privacy.admin,
         notifications_api.devices,
+        search.router,
+        invitations.router,
     ):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))

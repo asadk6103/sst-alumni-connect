@@ -14,7 +14,24 @@ from .alumni import (
     VerificationEvent,
 )
 from .base import Base
-from .community import Comment, ContentReport, DiscussionGroup, GroupMember, ModerationAction, Post, PostMedia, Reaction
+from .community import (
+    Comment,
+    CommentReaction,
+    ContentReport,
+    DiscussionGroup,
+    GroupMember,
+    HiddenPost,
+    Invitation,
+    ModerationAction,
+    Poll,
+    PollOption,
+    PollVote,
+    Post,
+    PostMedia,
+    PostTag,
+    Reaction,
+    SavedPost,
+)
 from .config import (
     AuditLog,
     BrandingSetting,
@@ -72,6 +89,14 @@ from .messaging import (
 )
 
 __all__ = [
+    "SavedPost",
+    "PostTag",
+    "PollVote",
+    "PollOption",
+    "Poll",
+    "Invitation",
+    "HiddenPost",
+    "CommentReaction",
     "CmsPage",
     "ContactMessage",
     "CustomField",

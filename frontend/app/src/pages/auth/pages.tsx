@@ -8,7 +8,7 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/display';
-import { Field, Input, PasswordInput } from '@/components/ui/form';
+import { Checkbox, Field, Input, PasswordInput } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 
 function errorText(e: unknown) {
@@ -49,6 +49,7 @@ export function LoginPage() {
   const loc = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export function LoginPage() {
       if (challenge) {
         await completeMfa(challenge, code);
       } else {
-        const r = await login(email, password);
+        const r = await login(email, password, remember);
         if (r.mfa_required) setChallenge(r.challenge);
       }
     } catch (err) {
@@ -110,8 +111,8 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title={t('auth.sign_in_title', 'Sign in to Alumni Portal')} subtitle="Access your alumni account and stay connected with the SST community."
-      footer={<>{t('auth.no_account', 'New here?')} <Link to="/register" className="font-medium text-primary hover:underline">{t('auth.register', 'Create an alumni account')}</Link></>}>
+    <AuthLayout title={t('auth.welcome_back', 'Welcome Back')} subtitle={t('auth.sign_in_sub', 'Sign in to your Alumni account')}
+      footer={<>{t('auth.no_account', 'New to the Alumni Portal?')} <Link to="/register" className="ms-1 font-bold text-primary hover:underline">{t('auth.create_account', 'Create an Account')}</Link></>}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         {error && (
           <Alert tone="danger">
@@ -120,21 +121,27 @@ export function LoginPage() {
           </Alert>
         )}
         {info && <Alert tone="success">{info}</Alert>}
-        <Field label={t('auth.email', 'Email address')} required>
+        <Field label={t('auth.email', 'Email Address')}>
           {(id) => (
             <div className="relative">
-              <Mail className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-              <Input id={id} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" placeholder="you@example.com" autoFocus />
+              <Mail className="pointer-events-none absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <Input id={id} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 ps-11 text-[15px]" placeholder={t('auth.email_ph', 'Enter your email address')} autoFocus />
             </div>
           )}
         </Field>
-        <Field label={t('auth.password', 'Password')} required>
-          {(id) => <PasswordInput id={id} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
-        </Field>
-        <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">{t('auth.forgot', 'Forgot password?')}</Link>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="login-password" className="text-[13px] font-medium text-ink">{t('auth.password', 'Password')}</label>
+            <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">{t('auth.forgot', 'Forgot Password?')}</Link>
+          </div>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute start-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <PasswordInput id="login-password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
+              className="h-12 ps-11 text-[15px]" placeholder={t('auth.password_ph', 'Enter your password')} />
+          </div>
         </div>
-        <Button type="submit" className="w-full" size="lg" loading={busy} disabled={!email || !password}><Lock />{t('auth.sign_in', 'Sign in')}</Button>
+        <Checkbox checked={remember} onCheckedChange={setRemember} label={t('auth.remember', 'Remember me')} />
+        <Button type="submit" className="h-12 w-full text-base" loading={busy} disabled={!email || !password}>{t('auth.sign_in', 'Sign In')}</Button>
       </form>
     </AuthLayout>
   );

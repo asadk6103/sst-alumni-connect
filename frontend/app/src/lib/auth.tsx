@@ -14,7 +14,7 @@ type AuthState = {
   user: User | null;
   ready: boolean;
   can: (perm: string) => boolean;
-  login: (email: string, password: string) => Promise<LoginResult>;
+  login: (email: string, password: string, remember?: boolean) => Promise<LoginResult>;
   completeMfa: (challenge: string, code: string) => Promise<User>;
   acceptSession: (access: string, user: User) => void;
   logout: () => Promise<void>;
@@ -70,9 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password: string, remember = true): Promise<LoginResult> => {
     const r = await api<{ data: { mfa_required?: boolean; challenge?: string; access_token?: string; user?: User } }>(
-      '/api/v1/auth/login', { method: 'POST', body: { email, password }, auth: false });
+      '/api/v1/auth/login', { method: 'POST', body: { email, password, remember }, auth: false });
     if (r.data.mfa_required) return { mfa_required: true, challenge: r.data.challenge! };
     acceptSession(r.data.access_token!, r.data.user!);
     return { user: r.data.user! };
@@ -108,5 +108,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 /** Where a user lands after signing in. */
 export function homeFor(u: User) {
   if (u.mfa_setup_required || u.password_expired) return '/portal/account/security';
-  return u.is_staff ? '/admin' : '/portal';
+  return '/portal'; // everyone starts on the Feed; staff open Administration from the menu
 }

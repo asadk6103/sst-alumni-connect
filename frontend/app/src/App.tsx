@@ -9,13 +9,14 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/display';
 import { ForgotPasswordPage, LoginPage, ResetPasswordPage, VerifyEmailPage } from '@/pages/auth/pages';
 import { AccountPage } from '@/pages/portal/Account';
-import { PortalDashboard } from '@/pages/portal/Dashboard';
+import { FeedPage } from '@/pages/portal/Feed';
 
 const RegisterPage = lazy(() => import('@/pages/auth/Register').then((m) => ({ default: m.RegisterPage })));
 const DirectoryPage = lazy(() => import('@/pages/portal/Directory').then((m) => ({ default: m.DirectoryPage })));
 const ProfileViewPage = lazy(() => import('@/pages/portal/Profile').then((m) => ({ default: m.ProfileViewPage })));
 const MyProfilePage = lazy(() => import('@/pages/portal/MyProfile').then((m) => ({ default: m.MyProfilePage })));
 const ConnectionsPage = lazy(() => import('@/pages/portal/Connections').then((m) => ({ default: m.ConnectionsPage })));
+const SavedPostsPage = lazy(() => import('@/pages/portal/Feed').then((m) => ({ default: m.SavedPostsPage })));
 const community = () => import('@/pages/portal/Community');
 const CommunityPage = lazy(() => community().then((m) => ({ default: m.CommunityPage })));
 const GroupsPage = lazy(() => community().then((m) => ({ default: m.GroupsPage })));
@@ -68,12 +69,8 @@ const EventsAdminPage = lazy(() => eng().then((m) => ({ default: m.EventsAdminPa
 const JobsAdminPage = lazy(() => eng().then((m) => ({ default: m.JobsAdminPage })));
 const MentorshipAdminPage = lazy(() => eng().then((m) => ({ default: m.MentorshipAdminPage })));
 const AchievementsAdminPage = lazy(() => eng().then((m) => ({ default: m.AchievementsAdminPage })));
-const web = () => import('@/pages/admin/Website');
-const PagesAdminPage = lazy(() => web().then((m) => ({ default: m.PagesAdminPage })));
-const PageEditorPage = lazy(() => web().then((m) => ({ default: m.PageEditorPage })));
+const web = () => import('@/pages/admin/News');
 const NewsAdminPage = lazy(() => web().then((m) => ({ default: m.NewsAdminPage })));
-const NavigationAdminPage = lazy(() => web().then((m) => ({ default: m.NavigationAdminPage })));
-const MessagesAdminPage = lazy(() => web().then((m) => ({ default: m.MessagesAdminPage })));
 const adm = () => import('@/pages/admin/Administration');
 const CustomFieldsAdminPage = lazy(() => adm().then((m) => ({ default: m.CustomFieldsAdminPage })));
 const ReportsPage = lazy(() => adm().then((m) => ({ default: m.ReportsPage })));
@@ -131,11 +128,7 @@ export function App() {
         <Route path="donations/:tab?" element={<RequirePerm perms={perm('/admin/donations')}><DonationsAdminPage /></RequirePerm>} />
         <Route path="newsletters" element={<RequirePerm perms={perm('/admin/newsletters')}><NewslettersAdminPage /></RequirePerm>} />
         <Route path="gallery" element={<RequirePerm perms={perm('/admin/gallery')}><GalleryAdminPage /></RequirePerm>} />
-        <Route path="pages" element={<RequirePerm perms={perm('/admin/pages')}><PagesAdminPage /></RequirePerm>} />
-        <Route path="pages/:id" element={<RequirePerm perms={perm('/admin/pages')}><PageEditorPage /></RequirePerm>} />
-        <Route path="navigation" element={<RequirePerm perms={['navigation.view']}><NavigationAdminPage /></RequirePerm>} />
         <Route path="news" element={<RequirePerm perms={perm('/admin/news')}><NewsAdminPage /></RequirePerm>} />
-        <Route path="website/messages" element={<RequirePerm perms={perm('/admin/website/messages')}><MessagesAdminPage /></RequirePerm>} />
         <Route path="custom-fields" element={<RequirePerm perms={perm('/admin/custom-fields')}><CustomFieldsAdminPage /></RequirePerm>} />
         <Route path="reports/:key?" element={<RequirePerm perms={perm('/admin/reports')}><ReportsPage /></RequirePerm>} />
         <Route path="privacy" element={<RequirePerm perms={perm('/admin/privacy')}><PrivacyAdminPage /></RequirePerm>} />
@@ -150,7 +143,9 @@ export function App() {
       </Route>
 
       <Route path="/portal" element={<RequireAuth><PortalLayout /></RequireAuth>}>
-        <Route index element={<PortalDashboard />} />
+        <Route index element={<FeedPage />} />
+        <Route path="saved" element={<Lazy><SavedPostsPage /></Lazy>} />
+        <Route path="network/:tab?" element={<Lazy><ConnectionsPage /></Lazy>} />
         <Route path="directory" element={<Lazy><DirectoryPage /></Lazy>} />
         <Route path="alumni/:id" element={<Lazy><ProfileViewPage /></Lazy>} />
         <Route path="profile/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
@@ -184,7 +179,8 @@ export function App() {
         <Route path="*" element={<NotFound />} />
       </Route>
 
-      <Route path="/" element={!ready ? <FullPageSpinner /> : <Navigate to={user ? homeFor(user) : '/login'} replace />} />
+      {/* The sign-in page is the landing page; signed-in members go to the Feed. */}
+      <Route path="/" element={!ready ? <FullPageSpinner /> : user ? <Navigate to={homeFor(user)} replace /> : <LoginPage />} />
       <Route path="*" element={<div className="grid min-h-screen place-items-center bg-canvas"><NotFound /></div>} />
     </Routes>
   );

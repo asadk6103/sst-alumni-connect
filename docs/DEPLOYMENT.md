@@ -9,7 +9,6 @@
 | Service | Role | Scales | Persistent data |
 |---|---|---|---|
 | `nginx` | single entry point (port `HTTP_PORT`, default 8080), serves the portal/admin app | – | – |
-| `frontend` | public website (Next.js) | ✓ | – |
 | `api` | REST API; runs migrations + bootstrap on start | ✓ `--scale api=N` | – |
 | `realtime` | Socket.IO gateway (WebSocket), Redis-coordinated | ✓ `--scale realtime=N` | – |
 | `celery-worker` | email/SMS delivery, background jobs | ✓ | – |

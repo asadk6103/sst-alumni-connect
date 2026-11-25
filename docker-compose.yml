@@ -164,19 +164,6 @@ services:
       api: { condition: service_healthy }
     deploy: { resources: { limits: { memory: 256m } } }
 
-  frontend:
-    build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
-      target: web
-    image: sst-alumni/web:latest
-    restart: unless-stopped
-    environment:
-      API_INTERNAL_URL: http://api:8000
-    networks: [edge]
-    deploy: { resources: { limits: { memory: 512m } } }
-    logging: *logging
-
   nginx:
     build:
       context: .

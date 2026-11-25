@@ -37,6 +37,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=256)
+    remember: bool = True  # false: the sign-in ends when the browser is closed
 
 
 class MfaLoginIn(BaseModel):
@@ -178,13 +179,15 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
         user.password_hash = hash_password(body.password)
     if user.totp_enabled:
         challenge = random_token(32)
-        await svc.create_verification(db, user, "mfa_challenge", token_hash(challenge), timedelta(minutes=5))
+        await svc.create_verification(
+            db, user, "mfa_challenge", token_hash(challenge), timedelta(minutes=5), data={"remember": body.remember}
+        )
         return {"data": {"mfa_required": True, "challenge": challenge}}
     if user.status == "pending":
         user.status = "active"
     await svc.record_attempt(db, request, body.email, True, None, user)
     await _login_alert(db, request, user)
-    tokens = await svc.issue_session(db, request, response, user)
+    tokens = await svc.issue_session(db, request, response, user, remember=body.remember)
     return {"data": {**tokens, "user": await user_payload(db, user)}}
 
 
@@ -220,7 +223,7 @@ async def login_mfa(body: MfaLoginIn, request: Request, response: Response, db: 
         user.status = "active"
     await svc.record_attempt(db, request, user.email, True, "mfa", user)
     await _login_alert(db, request, user)
-    tokens = await svc.issue_session(db, request, response, user)
+    tokens = await svc.issue_session(db, request, response, user, remember=(v.data or {}).get("remember", True))
     return {"data": {**tokens, "user": await user_payload(db, user)}}
 
 
