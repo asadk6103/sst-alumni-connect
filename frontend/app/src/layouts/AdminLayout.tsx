@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Activity, BadgeCheck, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
+import { Activity, BadgeCheck, Briefcase, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
   X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
@@ -17,6 +17,10 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/verification', label: 'Alumni Verification', icon: BadgeCheck, perms: ['verification.view'] },
   { to: '/admin/batches', label: 'Batch Management', icon: Layers, perms: ['batches.view'] },
   { to: '/admin/community', label: 'Community Moderation', icon: MessagesSquare, perms: ['community.view'] },
+  { to: '/admin/events', label: 'Events Management', icon: CalendarDays, perms: ['events.view'] },
+  { to: '/admin/jobs', label: 'Jobs & Internships', icon: Briefcase, perms: ['jobs.view'] },
+  { to: '/admin/mentorship', label: 'Mentorship', icon: UsersRound, perms: ['mentorship.view'] },
+  { to: '/admin/achievements', label: 'Alumni Achievements', icon: Medal, perms: ['achievements.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },
   { to: '/admin/roles', label: 'Roles & Permissions', icon: KeyRound, perms: ['roles.view'] },
   { to: '/admin/media', label: 'Media Library', icon: ImageIcon, perms: ['media.view'] },

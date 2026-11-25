@@ -22,6 +22,20 @@ const GroupsPage = lazy(() => community().then((m) => ({ default: m.GroupsPage }
 const GroupPage = lazy(() => community().then((m) => ({ default: m.GroupPage })));
 const PostPage = lazy(() => community().then((m) => ({ default: m.PostPage })));
 const MessagesPage = lazy(() => import('@/pages/portal/Messages').then((m) => ({ default: m.MessagesPage })));
+const evp = () => import('@/pages/portal/Events');
+const EventsPage = lazy(() => evp().then((m) => ({ default: m.EventsPage })));
+const EventPage = lazy(() => evp().then((m) => ({ default: m.EventPage })));
+const jbp = () => import('@/pages/portal/Jobs');
+const JobsPage = lazy(() => jbp().then((m) => ({ default: m.JobsPage })));
+const JobPage = lazy(() => jbp().then((m) => ({ default: m.JobPage })));
+const PostJobPage = lazy(() => jbp().then((m) => ({ default: m.PostJobPage })));
+const JobApplicationsPage = lazy(() => jbp().then((m) => ({ default: m.JobApplicationsPage })));
+const mnp = () => import('@/pages/portal/Mentorship');
+const MentorshipPage = lazy(() => mnp().then((m) => ({ default: m.MentorshipPage })));
+const MentorshipRequestPage = lazy(() => mnp().then((m) => ({ default: m.MentorshipRequestPage })));
+const acp = () => import('@/pages/portal/Achievements');
+const AchievementsPage = lazy(() => acp().then((m) => ({ default: m.AchievementsPage })));
+const AchievementPage = lazy(() => acp().then((m) => ({ default: m.AchievementPage })));
 
 // Administration and setup screens load on demand (smaller first load for members).
 const SetupWizard = lazy(() => import('@/pages/setup/SetupWizard').then((m) => ({ default: m.SetupWizard })));
@@ -38,6 +52,11 @@ const AlumniPage = lazy(() => import('@/pages/admin/Alumni').then((m) => ({ defa
 const VerificationPage = lazy(() => import('@/pages/admin/Verification').then((m) => ({ default: m.VerificationPage })));
 const BatchesPage = lazy(() => import('@/pages/admin/Batches').then((m) => ({ default: m.BatchesPage })));
 const CommunityAdminPage = lazy(() => import('@/pages/admin/Community').then((m) => ({ default: m.CommunityAdminPage })));
+const eng = () => import('@/pages/admin/Engagement');
+const EventsAdminPage = lazy(() => eng().then((m) => ({ default: m.EventsAdminPage })));
+const JobsAdminPage = lazy(() => eng().then((m) => ({ default: m.JobsAdminPage })));
+const MentorshipAdminPage = lazy(() => eng().then((m) => ({ default: m.MentorshipAdminPage })));
+const AchievementsAdminPage = lazy(() => eng().then((m) => ({ default: m.AchievementsAdminPage })));
 
 function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean }) {
   const { user, ready } = useAuth();
@@ -80,6 +99,10 @@ export function App() {
         <Route path="verification/:tab?" element={<RequirePerm perms={perm('/admin/verification')}><VerificationPage /></RequirePerm>} />
         <Route path="batches" element={<RequirePerm perms={perm('/admin/batches')}><BatchesPage /></RequirePerm>} />
         <Route path="community/:tab?" element={<RequirePerm perms={perm('/admin/community')}><CommunityAdminPage /></RequirePerm>} />
+        <Route path="events/:id?" element={<RequirePerm perms={perm('/admin/events')}><EventsAdminPage /></RequirePerm>} />
+        <Route path="jobs/:tab?" element={<RequirePerm perms={perm('/admin/jobs')}><JobsAdminPage /></RequirePerm>} />
+        <Route path="mentorship" element={<RequirePerm perms={perm('/admin/mentorship')}><MentorshipAdminPage /></RequirePerm>} />
+        <Route path="achievements" element={<RequirePerm perms={perm('/admin/achievements')}><AchievementsAdminPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />
@@ -101,6 +124,18 @@ export function App() {
         <Route path="community/groups/:id" element={<Lazy><GroupPage /></Lazy>} />
         <Route path="community/posts/:id" element={<Lazy><PostPage /></Lazy>} />
         <Route path="messages/:id?" element={<Lazy><MessagesPage /></Lazy>} />
+        <Route path="events" element={<Lazy><EventsPage /></Lazy>} />
+        <Route path="events/:id" element={<Lazy><EventPage /></Lazy>} />
+        <Route path="jobs" element={<Lazy><JobsPage /></Lazy>} />
+        <Route path="jobs/tab/:tab" element={<Lazy><JobsPage /></Lazy>} />
+        <Route path="jobs/post/:id?" element={<Lazy><PostJobPage /></Lazy>} />
+        <Route path="jobs/:id" element={<Lazy><JobPage /></Lazy>} />
+        <Route path="jobs/:id/applications" element={<Lazy><JobApplicationsPage /></Lazy>} />
+        <Route path="mentorship" element={<Lazy><MentorshipPage /></Lazy>} />
+        <Route path="mentorship/tab/:tab" element={<Lazy><MentorshipPage /></Lazy>} />
+        <Route path="mentorship/requests/:id" element={<Lazy><MentorshipRequestPage /></Lazy>} />
+        <Route path="achievements" element={<Lazy><AchievementsPage /></Lazy>} />
+        <Route path="achievements/:id" element={<Lazy><AchievementPage /></Lazy>} />
         <Route path="account/:section?" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

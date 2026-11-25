@@ -13,6 +13,7 @@ from .core import errors, secrets, settings_store
 from .core.config import infra
 from .core.db import SessionLocal, engine
 from .core.metrics import MetricsMiddleware, metrics_endpoint
+from .modules.achievements import router as achievements
 from .modules.admin import audit as admin_audit
 from .modules.admin import dashboard as admin_dashboard
 from .modules.admin import health as admin_health
@@ -29,6 +30,9 @@ from .modules.auth.router import router as auth_router
 from .modules.community import admin as community_admin
 from .modules.community import router as community
 from .modules.configuration.router import router as config_router
+from .modules.events import router as events
+from .modules.jobs import router as jobs
+from .modules.mentorship import router as mentorship
 from .modules.messaging import router as messaging
 from .modules.public.router import router as public_router
 from .modules.setup.router import announce
@@ -119,7 +123,8 @@ def create_app() -> FastAPI:
     for r in (setup_router, auth_router, public_router, admin_users.router, admin_roles.router, admin_audit.router,
               admin_media.router, admin_health.router, admin_dashboard.router, config_router, alumni_registration.router,
               alumni_dashboard.router, alumni_portal.router, alumni_admin.router, alumni_records.router, alumni_batches.router,
-              community.router, community_admin.router, messaging.router):
+              community.router, community_admin.router, messaging.router, events.router, events.admin,
+              jobs.router, jobs.admin, mentorship.router, mentorship.admin, achievements.router, achievements.admin, achievements.public):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))
     app.add_middleware(GZipMiddleware, minimum_size=1024)

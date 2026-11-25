@@ -92,7 +92,7 @@ DEFAULT_ROLES: dict[str, tuple[str, str, bool, set[str]]] = {
                             "custom_fields", "feature_flags", "audit", "health", "navigation", "media")),
     "alumni_admin": ("Alumni Administrator", "Manages alumni records, verification, batches and community.", True,
                      _admin("dashboard", "alumni", "verification", "batches", "community", "achievements",
-                            "reports", "communications")),
+                            "reports", "communications") | _admin("media", actions=("view", "create"))),
     "alumni_coordinator": ("Alumni Coordinator", "Day-to-day alumni engagement and verification.", True,
                            _admin("dashboard", actions=("view",)) | _admin("alumni", actions=("view", "edit"))
                            | _admin("verification", "batches", "achievements")

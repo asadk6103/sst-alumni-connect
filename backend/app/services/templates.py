@@ -79,3 +79,75 @@ DEFAULT_TEMPLATES: list[tuple[str, str, str, str | None, str, list[str]]] = [
      "School records: {{match}}</p>"
      '<p><a class="btn" href="{{link}}">Open the verification queue</a></p>', ["name", "email", "kind", "year", "match", "link", "app_name"]),
 ]
+
+
+def _t(key: str, name: str, subject: str, body: str, ph: list[str]) -> tuple:
+    return (key, "email", name, subject, body, [*ph, "app_name"])
+
+
+def _btn(label: str) -> str:
+    return f'<p><a class="btn" href="{{{{link}}}}">{label}</a></p>'
+
+
+DEFAULT_TEMPLATES += [
+    # events
+    _t("events.registered", "Event registration confirmed", "You're registered: {{event}}",
+       "<p>Hello {{name}},</p><p>You are registered for <strong>{{event}}</strong> on {{when}} ({{where}}).</p>"
+       "<p>Your ticket with its QR code is on the event page — show it at the entrance.</p>" + _btn("View my ticket"),
+       ["name", "event", "when", "where", "link"]),
+    _t("events.waitlisted", "Event waitlist", "You're on the waitlist: {{event}}",
+       "<p>Hello {{name}},</p><p><strong>{{event}}</strong> ({{when}}) is full, so you are on the waitlist. "
+       "We will email you as soon as a place frees up.</p>" + _btn("View event"), ["name", "event", "when", "where", "link"]),
+    _t("events.promoted", "Waitlist place confirmed", "A place opened up: {{event}}",
+       "<p>Hello {{name}},</p><p>Good news — a place opened up and you are now registered for <strong>{{event}}</strong> on {{when}}.</p>"
+       + _btn("View my ticket"), ["name", "event", "when", "link"]),
+    _t("events.cancelled", "Event cancelled", "Cancelled: {{event}}",
+       "<p>Hello {{name}},</p><p>We are sorry — <strong>{{event}}</strong> has been cancelled.</p><blockquote>{{reason}}</blockquote>"
+       + _btn("See other events"), ["name", "event", "reason", "link"]),
+    _t("events.reminder", "Event reminder", "Tomorrow: {{event}}",
+       "<p>Hello {{name}},</p><p>A reminder that <strong>{{event}}</strong> starts {{when}} ({{where}}).</p>" + _btn("Event details"),
+       ["name", "event", "when", "where", "link"]),
+    # jobs
+    _t("jobs.application_received", "New job application (poster)", "New application: {{job}}",
+       "<p>Hello {{name}},</p><p>{{applicant}} applied for <strong>{{job}}</strong>.</p>" + _btn("Review applications"),
+       ["name", "applicant", "job", "link"]),
+    _t("jobs.application_status", "Application status update", "Your application for {{job}}",
+       "<p>Hello {{name}},</p><p>Your application for <strong>{{job}}</strong> at {{organization}} is now: <strong>{{status}}</strong>.</p>"
+       + _btn("My applications"), ["name", "job", "organization", "status", "link"]),
+    _t("jobs.approved", "Job approved", "Your job is live: {{job}}",
+       "<p>Hello {{name}},</p><p><strong>{{job}}</strong> was approved and is now listed for alumni.</p>" + _btn("View job"),
+       ["name", "job", "link"]),
+    _t("jobs.rejected", "Job not approved", "Your job needs changes: {{job}}",
+       "<p>Hello {{name}},</p><p><strong>{{job}}</strong> was not approved:</p><blockquote>{{reason}}</blockquote>"
+       "<p>Edit the job and it will be reviewed again.</p>" + _btn("Edit job"), ["name", "job", "reason", "link"]),
+    # mentorship
+    _t("mentorship.request", "Mentorship request (mentor)", "{{from}} asked you for mentorship",
+       "<p>Hello {{name}},</p><p>{{from}} would like your mentorship on <strong>{{topic}}</strong>.</p>" + _btn("Reply"),
+       ["name", "from", "topic", "link"]),
+    _t("mentorship.accepted", "Mentorship accepted", "{{mentor}} accepted your mentorship request",
+       "<p>Hello {{name}},</p><p>{{mentor}} accepted your request.</p><p>{{note}}</p><p>Schedule your first session together.</p>"
+       + _btn("Open mentorship"), ["name", "mentor", "note", "link"]),
+    _t("mentorship.declined", "Mentorship declined", "Your mentorship request",
+       "<p>Hello {{name}},</p><p>{{mentor}} cannot take on your request right now.</p><p>{{note}}</p><p>Other mentors may be able to help.</p>"
+       + _btn("Find a mentor"), ["name", "mentor", "note", "link"]),
+    _t("mentorship.cancelled", "Mentorship cancelled", "Mentorship cancelled: {{topic}}",
+       "<p>Hello {{name}},</p><p>{{mentee}} cancelled the mentorship on <strong>{{topic}}</strong>.</p>" + _btn("Mentorship"),
+       ["name", "mentee", "topic", "link"]),
+    _t("mentorship.completed", "Mentorship completed", "Mentorship completed: {{topic}}",
+       "<p>Hello {{name}},</p><p>{{by}} marked the mentorship on <strong>{{topic}}</strong> as completed. Please share your feedback.</p>"
+       + _btn("Leave feedback"), ["name", "by", "topic", "link"]),
+    _t("mentorship.session", "Mentorship session scheduled", "Mentoring session on {{when}}",
+       "<p>Hello {{name}},</p><p>{{by}} scheduled a {{format}} session on {{when}}.</p>" + _btn("Session details"),
+       ["name", "by", "when", "format", "link"]),
+    _t("mentorship.mentor_approved", "Mentor application approved", "You are now a mentor",
+       "<p>Hello {{name}},</p><p>Your mentor application was approved — alumni and students can now request your mentorship.</p>"
+       + _btn("Mentorship"), ["name", "link"]),
+    _t("mentorship.mentor_rejected", "Mentor application not approved", "Your mentor application",
+       "<p>Hello {{name}},</p><p>Your mentor application was not approved:</p><blockquote>{{reason}}</blockquote>" + _btn("Update application"),
+       ["name", "reason", "link"]),
+    # achievements
+    _t("achievements.published", "Achievement published", "Congratulations — {{kind}}",
+       "<p>Hello {{name}},</p><p>Your achievement “{{title}}” is now featured in the alumni portal.</p>"
+       "<p>Would you like it to appear on the public website too? You can choose on the achievement page.</p>" + _btn("View and choose"),
+       ["name", "title", "kind", "link"]),
+]

@@ -93,4 +93,15 @@ def cleanup():
     return _run(_cleanup)
 
 
+
+async def _event_reminders(db) -> int:
+    from .modules.events.router import send_reminders
+
+    return await send_reminders(db)
+
+
+@celery_app.task(name="app.tasks.event_reminders")
+def event_reminders():
+    return _run(_event_reminders)
+
 __all__ = ["dispatch"]

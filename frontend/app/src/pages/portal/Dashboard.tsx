@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, BadgeCheck, Check, Clock, Globe2, GraduationCap, Inbox, KeyRound, MapPinned, Phone, Search, ShieldAlert,
+import { ArrowRight, BadgeCheck, Briefcase, CalendarDays, Check, Medal, MessagesSquare, UsersRound, Clock, Globe2, GraduationCap, Inbox, KeyRound, MapPinned, Phone, Search, ShieldAlert,
   Sparkles, UserCog, UserPlus, Users, X } from 'lucide-react';
 import { api, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -9,8 +10,13 @@ import { classLabel, headline, type PersonCard } from '@/lib/alumni';
 import { pickVariant, useSite } from '@/lib/site';
 import { cn, timeAgo } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Alert, Card, CardHeader, EmptyState, Progress, Skeleton, StatTile } from '@/components/ui/display';
+import { Alert, Badge, Card, CardHeader, EmptyState, Progress, Skeleton, StatTile } from '@/components/ui/display';
 import { PersonAvatar, PersonTile, VerifiedBadge } from '@/components/alumni';
+import type { PostT } from '@/components/community';
+import { when, type EventT } from './Events';
+import { JobRow, type Job } from './Jobs';
+import { AchievementCard, type AchievementT } from './Achievements';
+import { MentorDialog, type MentorT } from './Mentorship';
 
 type Stats = {
   registered_alumni: number; verified_alumni: number; students: number; countries: number; batches: number; new_last_30_days: number;
@@ -26,6 +32,7 @@ type Dash = {
   stats?: Stats;
   requests?: { total: number; items: (PersonCard & { request_id: string; message: string | null; since: string })[] };
   suggestions?: PersonCard[];
+  events?: EventT[]; posts?: PostT[]; jobs?: Job[]; achievements?: AchievementT[]; mentors?: MentorT[];
 };
 
 export function PortalDashboard() {
@@ -50,6 +57,10 @@ export function PortalDashboard() {
         <div className="min-w-0 space-y-6">
           {has('connection_requests') && d.requests && <Requests r={d.requests} />}
           {has('suggestions') && d.suggestions && <Suggestions items={d.suggestions} />}
+          {has('upcoming_events') && d.events && <UpcomingEvents items={d.events} />}
+          {has('community_posts') && d.posts && <LatestPosts items={d.posts} />}
+          {has('latest_jobs') && d.jobs && <LatestJobs items={d.jobs} />}
+          {has('achievements') && d.achievements && <RecentAchievements items={d.achievements} />}
           {(has('by_year') || has('by_country')) && d.stats && (
             <div className="grid gap-6 lg:grid-cols-2">
               {has('by_year') && <ByYear s={d.stats} />}
@@ -59,6 +70,7 @@ export function PortalDashboard() {
         </div>
         <div className="space-y-6">
           {has('profile_completion') && <Completion d={d} />}
+          {has('mentors') && d.mentors && <Mentors items={d.mentors} />}
           {has('quick_actions') && <QuickActions />}
         </div>
       </div>
@@ -238,6 +250,80 @@ function QuickActions() {
           </Link>
         ))}
       </div>
+    </Card>
+  );
+}
+
+function UpcomingEvents({ items }: { items: EventT[] }) {
+  return (
+    <Card>
+      <CardHeader title="Upcoming events" icon={CalendarDays} action={<Button asChild variant="link" size="sm"><Link to="/portal/events">All events<ArrowRight /></Link></Button>} />
+      {!items.length ? <EmptyState icon={CalendarDays} title="No upcoming events" description="New events are announced here." /> : (
+        <ul className="divide-y divide-line">{items.map((e) => (
+          <li key={e.id}><Link to={`/portal/events/${e.id}`} className="flex items-center gap-4 px-5 py-3 hover:bg-canvas">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-card bg-primary-soft text-center text-primary">
+              <span><span className="block text-[11px] font-medium uppercase">{new Date(e.starts_at).toLocaleString(undefined, { month: 'short' })}</span>
+                <span className="block font-heading text-xl font-semibold leading-none">{new Date(e.starts_at).getDate()}</span></span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{e.title}</span>
+              <span className="block truncate text-xs text-ink-muted">{when(e)} · {e.is_online ? 'Online' : e.venue}</span></span>
+            {e.my_registration && e.my_registration.status !== 'cancelled' ? <Badge tone="success" className="capitalize">{e.my_registration.status}</Badge> : e.registration_open && <Badge tone="primary">Register</Badge>}
+          </Link></li>))}</ul>
+      )}
+    </Card>
+  );
+}
+
+function LatestPosts({ items }: { items: PostT[] }) {
+  return (
+    <Card>
+      <CardHeader title="Latest community posts" icon={MessagesSquare} action={<Button asChild variant="link" size="sm"><Link to="/portal/community">Community<ArrowRight /></Link></Button>} />
+      {!items.length ? <EmptyState icon={MessagesSquare} title="No posts yet" description="Start the conversation in the community." /> : (
+        <ul className="divide-y divide-line">{items.map((p) => (
+          <li key={p.id}><Link to={`/portal/community/posts/${p.id}`} className="block px-5 py-3 hover:bg-canvas">
+            <p className="text-xs text-ink-muted"><span className="font-medium text-ink">{p.author?.full_name}</span> · {timeAgo(p.created_at)}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-ink">{p.title ?? p.body ?? (p.media.length ? '📷 Photo' : '')}</p>
+            <p className="mt-1 text-xs text-ink-muted">{p.reaction_count} reactions · {p.comment_count} comments</p>
+          </Link></li>))}</ul>
+      )}
+    </Card>
+  );
+}
+
+function LatestJobs({ items }: { items: Job[] }) {
+  return (
+    <Card>
+      <CardHeader title="Latest job opportunities" icon={Briefcase} action={<Button asChild variant="link" size="sm"><Link to="/portal/jobs">All jobs<ArrowRight /></Link></Button>} />
+      {!items.length ? <EmptyState icon={Briefcase} title="No open jobs right now" /> : <div className="divide-y divide-line">{items.map((j) => <JobRow key={j.id} j={j} />)}</div>}
+    </Card>
+  );
+}
+
+function RecentAchievements({ items }: { items: AchievementT[] }) {
+  if (!items.length) return null;
+  return (
+    <Card>
+      <CardHeader title="Recent achievements" icon={Medal} action={<Button asChild variant="link" size="sm"><Link to="/portal/achievements">All<ArrowRight /></Link></Button>} />
+      <div className="grid gap-4 p-4 sm:grid-cols-3">{items.map((a) => <AchievementCard key={a.id} a={a} />)}</div>
+    </Card>
+  );
+}
+
+function Mentors({ items }: { items: MentorT[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const { can } = useAuth();
+  return (
+    <Card>
+      <CardHeader title="Mentors for you" icon={UsersRound} action={<Button asChild variant="link" size="sm"><Link to="/portal/mentorship">Find a mentor<ArrowRight /></Link></Button>} />
+      {!items.length ? <p className="p-5 text-sm text-ink-muted">No mentors yet. Experienced alumni can apply to become one.</p> : (
+        <ul className="divide-y divide-line">{items.map((m) => (
+          <li key={m.user.id}><button onClick={() => setOpen(m.user.id)} className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-canvas">
+            <PersonAvatar p={m.user} size={40} />
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-ink">{m.user.full_name}</span>
+              <span className="block truncate text-xs text-ink-muted">{m.expertise.slice(0, 2).join(' · ') || m.industry}</span></span>
+            {m.available && <Badge tone="success">Available</Badge>}
+          </button></li>))}</ul>
+      )}
+      {open && <MentorDialog id={open} canRequest={can('portal.mentorship.request')} onClose={() => setOpen(null)} />}
     </Card>
   );
 }

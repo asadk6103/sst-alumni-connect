@@ -14,12 +14,12 @@ type Item = { to: string; label: string; end?: boolean; perm?: string; module?: 
 // Sections appear as their modules are delivered (community, events, jobs … from Stage 3).
 const PORTAL_NAV: Item[] = [
   { to: '/portal', label: 'Dashboard', end: true },
-  { to: '/portal/directory', label: 'Alumni Directory', perm: 'portal.directory', module: 'directory' },
+  { to: '/portal/directory', label: 'Directory', perm: 'portal.directory', module: 'directory' },
   { to: '/portal/community', label: 'Community', perm: 'portal.react', module: 'community' },
-  { to: '/portal/connections', label: 'My Network', perm: 'portal.directory', module: 'directory' },
+  { to: '/portal/events', label: 'Events', module: 'events' },
+  { to: '/portal/jobs', label: 'Jobs', perm: 'portal.jobs.view', module: 'jobs' },
+  { to: '/portal/mentorship', label: 'Mentorship', module: 'mentorship' },
   { to: '/portal/messages', label: 'Messages', perm: 'portal.message', module: 'messaging' },
-  { to: '/portal/profile', label: 'My Profile' },
-  { to: '/portal/account', label: 'Account' },
 ];
 
 /** Dark navy global top navigation from the design, white workspace below. */

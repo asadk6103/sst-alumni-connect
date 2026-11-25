@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-24 · Current stage: **3 — Engagement (in progress)** · Stage 2 complete
+Last updated: 2026-11-24 · Current stage: **4 — Institutional support (next)** · Stages 1–3 complete
 
 ## Stage plan
 
@@ -8,7 +8,7 @@ Last updated: 2026-11-24 · Current stage: **3 — Engagement (in progress)** ·
 |---|---|---|
 | 1 Foundation | architecture, repository, Docker Compose, database, authentication, RBAC, setup wizard, branding, configuration center core | ✅ built & tested locally |
 | 2 Alumni core | registration (alumni fields, institutional record matching), verification, profiles, batches, directory, alumni dashboard | ✅ built & tested locally |
-| 3 Engagement | community feed (real-time), messaging, groups, events + QR check-in, jobs, mentorship, achievements | 🚧 in progress |
+| 3 Engagement | community feed (real-time), messaging, groups, events + QR check-in, jobs, mentorship, achievements | ✅ built & tested locally |
 | 4 Institutional | donations (gateway-less until providers are chosen), scholarships, newsletters, notifications, gallery | ⏳ |
 | 5 Administration | CMS + drag-and-drop page builder, navigation builder, custom fields, localisation (Urdu/RTL), reports & exports | ⏳ |
 | 6 Production readiness | security testing, load tests at target scale, HTTPS overlay, handbooks, ERD, checklist | ⏳ |
@@ -16,6 +16,42 @@ Last updated: 2026-11-24 · Current stage: **3 — Engagement (in progress)** ·
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
 payments on hold, generic HTTP SMS provider, students both self-register and are imported, p95 latency
 budget 200 ms for API reads.
+
+## Completed (Stage 3 — Engagement)
+
+**Community** — feed (cursor pagination, pinned announcements, following / mine / search), text and photo posts,
+reactions, comments with replies, shares, batch communities (automatic, private), interest groups and forums
+(member proposals approved by moderators, join approval, group moderators), reports, moderation queue (hide /
+delete / dismiss with reasons shown to the author), moderation log. Live feed and comment updates per room.
+
+**Messaging** — one-to-one (connections and batchmates; blocks win) and group chats up to 100 members, private
+attachments, replies, edit / delete, reactions, delivered and read receipts, unread counters and badge, conversation
+search, mute / archive / pin, idempotent sends (client_id) persisted before the acknowledgement, over REST or the
+socket. Gateway: authorised room subscriptions (user, feed, group, batch, conversation, event, admin), multi-device
+presence (Redis TTL + heartbeat, offline only when the last device goes), typing indicators.
+
+**Events** — reunions, batch reunions (batch-only visibility), webinars (link shown to attendees), seminars, sports,
+career sessions; capacity with automatic waitlist promotion, guests, deadlines, QR tickets and check-in (camera
+where supported, code entry everywhere), manual check-in, attendance export, calendar file, reminders 24 h before
+(Celery beat), cancellation emails, gallery, feedback and ratings.
+
+**Careers** — jobs and internships with filters, saved jobs, alumni referrals, postings reviewed by the career office,
+employer registration (approval grants the Employer role), private CVs, applications with status tracking and
+emails, poster notes, career resources, categories, CSV export.
+
+**Mentorship** — mentor applications (industry, expertise, skills, hours, formats, mentee types, capacity) approved by
+the coordinator, mentor directory with ratings and testimonials, requests from students and alumni, accept / decline,
+sessions with outcomes, completion, two-way feedback, history, CSV export.
+
+**Achievements** — nominations by members, review / edit / publish by the alumni office, distinguished alumni, alumni
+of the month, success stories; publication on the public website only with the member's consent.
+
+Dashboard widgets added: upcoming events, latest community posts, latest jobs, recent achievements, mentor
+recommendations; statistics now include active mentors and upcoming events.
+
+Fixes found while building Stage 3: kombu pinned to 5.4.2 (5.7 broke Celery's Redis transport with redis-py 5, so
+emails could not be queued), the real-time gateway now loads its heartbeat settings at start-up, the Redis client
+retries after a Redis restart, batch communities and staff profiles are created race-free.
 
 ## Completed (Stage 2 — Alumni core)
 
@@ -102,6 +138,23 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
 - `0002_alumni_core` — alumni_profiles (GIN full-text index), alumni_education, alumni_employment,
   alumni_achievements, alumni_skills, alumni_connections (one row per pair), alumni_follows, alumni_batches,
   student_records, verification_codes, alumni_verification_events, profile_reports; media_library.private.
+- `0003_community_messaging` — discussion_groups, group_members, posts, post_media, comments, reactions, reports,
+  moderation_actions, conversations, conversation_members, conversation_settings, messages, message_attachments,
+  message_receipts, message_reactions, blocked_users.
+- `0004_engagement` — events, event_registrations, event_attendance, event_media, event_feedback, employers,
+  job_categories, job_posts, job_applications, saved_jobs, resumes, career_resources, mentors, mentorship_requests,
+  mentorship_sessions, mentorship_feedback, achievements.
+
+## Test results — Stage 3 (2026-11-25, local)
+- Backend automated tests: **33 passed** (community feed / reactions / comments / shares / moderation, groups and
+  batch communities, messaging rules / idempotency / receipts / blocks / private attachments, multi-device presence,
+  gateway room authorisation and socket send, events with waitlist / QR check-in / reminders / feedback, jobs from
+  posting to hiring, mentorship from application to feedback, achievements with consent). Lint: clean.
+- Browser walk-throughs (`e2e-stage3-community.mjs`, `e2e-stage3-engagement.mjs`): **pass, no page errors**; found and
+  fixed a race on batch community creation and a stale registrations list after check-in.
+- Not demonstrable on this PC: cross-process live push (API → Redis pub/sub → gateway). The local in-memory Redis
+  does not push pub/sub messages; Docker uses real Redis. Run `LIVE=1 node scripts/e2e-stage3-community.mjs …`
+  against the Docker stack to verify live delivery, typing indicators and receipts end to end.
 
 ## Test results — Stage 2 (2026-11-24, local)
 - Backend automated tests: **24 passed** (17 Stage 1 + 7 Stage 2: registration validation and no account discovery;
@@ -132,15 +185,25 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
 - HTTPS: terminate TLS in front of nginx for now; a TLS overlay is planned for Stage 6.
 - Payment providers intentionally not implemented (on hold).
 - Navigation builder, CMS/page builder, custom fields, translations UI: Stage 5.
-- Directory "active mentors" and "upcoming events" statistics and their dashboard widgets arrive with those modules (Stage 3).
+
 
 ## Deployment status
 Not yet deployed. Commands for the first run are in README.md.
 
-## API endpoints (Stages 1–2: 129)
+## API endpoints (Stages 1–3: 267)
 
 | Area | Endpoint | Purpose |
 |---|---|---|
+| Achievements | `GET /api/v1/achievements/nominations/mine` | Nominations you made and achievements about you |
+| Achievements | `GET /api/v1/achievements/{achievement_id}` | An achievement |
+| Achievements | `GET /api/v1/achievements` | Published alumni achievements |
+| Achievements | `POST /api/v1/achievements/nominations` | Nominate an alumnus (yourself included) |
+| Achievements | `POST /api/v1/achievements/{achievement_id}/consent` | Allow (or not) your achievement on the public website |
+| Admin: achievements | `DELETE /api/v1/admin/achievements/{achievement_id}` | Delete an achievement |
+| Admin: achievements | `GET /api/v1/admin/achievements` | Nominations and achievements |
+| Admin: achievements | `POST /api/v1/admin/achievements/{achievement_id}/review` | Approve, publish, unpublish or reject |
+| Admin: achievements | `POST /api/v1/admin/achievements` | Add an achievement directly |
+| Admin: achievements | `PUT /api/v1/admin/achievements/{achievement_id}` | Edit an achievement (story, image, featuring) |
 | Admin: alumni | `GET /api/v1/admin/alumni/export` | Export alumni as CSV |
 | Admin: alumni | `GET /api/v1/admin/alumni/{user_id}` | Full alumni record (all sections, documents, history, record match) |
 | Admin: alumni | `GET /api/v1/admin/alumni` | List alumni and students |
@@ -164,6 +227,15 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: batches | `POST /api/v1/admin/batches/generate` | Create one batch per graduation year in a range |
 | Admin: batches | `POST /api/v1/admin/batches` | Create a batch |
 | Admin: batches | `PUT /api/v1/admin/batches/{batch_id}` | Update a batch |
+| Admin: community | `GET /api/v1/admin/community/groups` | All groups, including proposals waiting for approval |
+| Admin: community | `GET /api/v1/admin/community/moderation-log` | Moderation history |
+| Admin: community | `GET /api/v1/admin/community/posts` | All posts (search, status, group) |
+| Admin: community | `GET /api/v1/admin/community/reports` | Reported posts and comments |
+| Admin: community | `POST /api/v1/admin/community/comments/{comment_id}/moderate` | Hide, restore or delete a comment |
+| Admin: community | `POST /api/v1/admin/community/groups/{group_id}/decide` | Approve, reject, archive or restore a group |
+| Admin: community | `POST /api/v1/admin/community/groups` | Create a group (staff) |
+| Admin: community | `POST /api/v1/admin/community/posts/{post_id}/moderate` | Hide, restore, delete, pin or unpin a post |
+| Admin: community | `POST /api/v1/admin/community/reports/{target_type}/{target_id}` | Decide on a reported post or comment |
 | Admin: configuration | `GET /api/v1/admin/config/branding` | Draft and published branding |
 | Admin: configuration | `GET /api/v1/admin/config/delivery-logs` | Email / SMS delivery log |
 | Admin: configuration | `GET /api/v1/admin/config/feature-flags` | Feature flags |
@@ -183,10 +255,41 @@ Not yet deployed. Commands for the first run are in README.md.
 | Admin: configuration | `PUT /api/v1/admin/config/settings/{group}` | Save a settings group |
 | Admin: configuration | `PUT /api/v1/admin/config/templates/{template_id}` | Edit a template |
 | Admin: dashboard | `GET /api/v1/admin/dashboard` | Headline figures for the admin dashboard |
+| Admin: events | `DELETE /api/v1/admin/events/{event_id}/checkin/{user_id}` | Undo a check-in |
+| Admin: events | `DELETE /api/v1/admin/events/{event_id}/media/{media_id}` | Remove a gallery photo |
+| Admin: events | `DELETE /api/v1/admin/events/{event_id}` | Delete a draft event |
+| Admin: events | `GET /api/v1/admin/events/{event_id}/feedback` | Feedback from attendees |
+| Admin: events | `GET /api/v1/admin/events/{event_id}/registrations/export` | Export registrations and attendance (CSV) |
+| Admin: events | `GET /api/v1/admin/events/{event_id}/registrations` | Registrations and attendance |
+| Admin: events | `GET /api/v1/admin/events/{event_id}` | One event (for editing) |
+| Admin: events | `GET /api/v1/admin/events` | All events |
+| Admin: events | `POST /api/v1/admin/events/{event_id}/cancel` | Cancel an event (registrants are emailed) |
+| Admin: events | `POST /api/v1/admin/events/{event_id}/checkin` | Check in an attendee (QR code or manual) |
+| Admin: events | `POST /api/v1/admin/events/{event_id}/media` | Add a photo to the event gallery |
+| Admin: events | `POST /api/v1/admin/events/{event_id}/publish` | Publish an event |
+| Admin: events | `POST /api/v1/admin/events` | Create an event (draft) |
+| Admin: events | `PUT /api/v1/admin/events/{event_id}` | Update an event |
+| Admin: jobs | `DELETE /api/v1/admin/jobs/categories/{category_id}` | Remove a job category |
+| Admin: jobs | `DELETE /api/v1/admin/jobs/resources/{resource_id}` | Delete a career resource |
+| Admin: jobs | `DELETE /api/v1/admin/jobs/{job_id}` | Delete a job |
+| Admin: jobs | `GET /api/v1/admin/jobs/employers` | Employer registrations |
+| Admin: jobs | `GET /api/v1/admin/jobs/export` | Export jobs (CSV) |
+| Admin: jobs | `GET /api/v1/admin/jobs/resources` | Career resources (all) |
+| Admin: jobs | `GET /api/v1/admin/jobs` | All job postings |
+| Admin: jobs | `POST /api/v1/admin/jobs/categories` | Add a job category |
+| Admin: jobs | `POST /api/v1/admin/jobs/employers/{employer_id}/decide` | Approve or reject an employer |
+| Admin: jobs | `POST /api/v1/admin/jobs/resources` | Add a career resource |
+| Admin: jobs | `POST /api/v1/admin/jobs/{job_id}/approve` | Approve and list a job |
+| Admin: jobs | `POST /api/v1/admin/jobs/{job_id}/reject` | Reject a job (the poster can correct and resubmit) |
+| Admin: jobs | `PUT /api/v1/admin/jobs/resources/{resource_id}` | Edit a career resource |
 | Admin: media library | `DELETE /api/v1/admin/media/{media_id}` | Delete a file (kept in storage until purged) |
 | Admin: media library | `GET /api/v1/admin/media` | Browse the media library |
 | Admin: media library | `PATCH /api/v1/admin/media/{media_id}` | Edit alternative text |
 | Admin: media library | `POST /api/v1/admin/media` | Upload a file |
+| Admin: mentorship | `GET /api/v1/admin/mentorship/export` | Export mentorships (CSV) |
+| Admin: mentorship | `GET /api/v1/admin/mentorship/mentors` | Mentor applications and mentors |
+| Admin: mentorship | `GET /api/v1/admin/mentorship/requests` | All mentorships |
+| Admin: mentorship | `POST /api/v1/admin/mentorship/mentors/{user_id}/decide` | Approve or reject a mentor application |
 | Admin: roles and permissions | `DELETE /api/v1/admin/roles/{role_id}` | Delete a custom role |
 | Admin: roles and permissions | `GET /api/v1/admin/roles/catalogue` | All permissions grouped by module |
 | Admin: roles and permissions | `GET /api/v1/admin/roles` | List roles |
@@ -258,9 +361,97 @@ Not yet deployed. Commands for the first run are in README.md.
 | Authentication | `POST /api/v1/auth/phone/send-code` | Send a mobile verification code by SMS |
 | Authentication | `POST /api/v1/auth/phone/verify` | Confirm the mobile number with the SMS code |
 | Authentication | `POST /api/v1/auth/refresh` | Exchange the refresh cookie for a new access token |
+| Community | `DELETE /api/v1/community/comments/{comment_id}` | Delete a comment (yours, or any as a moderator) |
+| Community | `DELETE /api/v1/community/posts/{post_id}/reaction` | Remove your reaction |
+| Community | `DELETE /api/v1/community/posts/{post_id}` | Delete a post (yours, or any as a moderator) |
+| Community | `GET /api/v1/community/feed` | Community feed (cursor pagination, newest first) |
+| Community | `GET /api/v1/community/groups/{group_id}/members` | Group members (and join requests for its managers) |
+| Community | `GET /api/v1/community/groups/{group_id}` | A group |
+| Community | `GET /api/v1/community/groups` | Your groups, or groups to discover |
+| Community | `GET /api/v1/community/posts/{post_id}/comments` | Comments of a post (oldest first, replies included) |
+| Community | `GET /api/v1/community/posts/{post_id}/reactions` | Who reacted |
+| Community | `GET /api/v1/community/posts/{post_id}` | One post |
+| Community | `PATCH /api/v1/community/comments/{comment_id}` | Edit your comment |
+| Community | `PATCH /api/v1/community/groups/{group_id}` | Edit a group (owners and moderators) |
+| Community | `PATCH /api/v1/community/posts/{post_id}` | Edit your post |
+| Community | `POST /api/v1/community/groups/{group_id}/join` | Join a group (or ask to join) |
+| Community | `POST /api/v1/community/groups/{group_id}/leave` | Leave a group |
+| Community | `POST /api/v1/community/groups/{group_id}/members/{user_id}` | Manage a member (owners and moderators) |
+| Community | `POST /api/v1/community/groups` | Propose a group (moderators approve it) |
+| Community | `POST /api/v1/community/posts/{post_id}/comments` | Comment on a post or reply to a comment |
+| Community | `POST /api/v1/community/posts` | Create a post (text, images, share, announcement or forum topic) |
+| Community | `POST /api/v1/community/reports` | Report a post or comment to the moderators |
+| Community | `POST /api/v1/community/uploads` | Upload a photo for a post |
+| Community | `PUT /api/v1/community/posts/{post_id}/reaction` | React to a post (replaces your previous reaction) |
+| Events | `GET /api/v1/events/{event_id}/calendar.ics` | Add to calendar (iCalendar file) |
+| Events | `GET /api/v1/events/{event_id}` | Event details (meeting link for registered attendees) |
+| Events | `GET /api/v1/events` | Events (upcoming, past or yours) |
+| Events | `POST /api/v1/events/{event_id}/cancel` | Cancel your registration |
+| Events | `POST /api/v1/events/{event_id}/register` | Register (joins the waitlist when the event is full) |
+| Events | `PUT /api/v1/events/{event_id}/feedback` | Rate an event you attended |
 | Health | `GET /api/v1/admin/health` | System health, queue backlog and recent API latency (p50/p95/p99) |
 | Health | `GET /api/v1/health/live` | Liveness probe |
 | Health | `GET /api/v1/health/ready` | Readiness probe (database + Redis) |
+| Jobs | `DELETE /api/v1/jobs/resumes/{resume_id}` | Delete a CV |
+| Jobs | `DELETE /api/v1/jobs/{job_id}/save` | Remove a saved job |
+| Jobs | `GET /api/v1/jobs/applications/mine` | Your applications and their status |
+| Jobs | `GET /api/v1/jobs/applications/{app_id}/resume` | Download the CV sent with an application |
+| Jobs | `GET /api/v1/jobs/categories` | Job categories |
+| Jobs | `GET /api/v1/jobs/employers/mine` | Organisations you registered |
+| Jobs | `GET /api/v1/jobs/mine` | Jobs you posted |
+| Jobs | `GET /api/v1/jobs/resources` | Career resources |
+| Jobs | `GET /api/v1/jobs/resumes/mine` | Your CVs |
+| Jobs | `GET /api/v1/jobs/resumes/{resume_id}/file` | Download your CV |
+| Jobs | `GET /api/v1/jobs/{job_id}/applications` | Applications for a job you posted |
+| Jobs | `GET /api/v1/jobs/{job_id}` | Job details |
+| Jobs | `GET /api/v1/jobs` | Job and internship listings |
+| Jobs | `PATCH /api/v1/jobs/applications/{app_id}` | Update an application's status (job poster or career office) |
+| Jobs | `POST /api/v1/jobs/applications/{app_id}/withdraw` | Withdraw your application |
+| Jobs | `POST /api/v1/jobs/employers` | Register your organisation as an employer (reviewed by the career office) |
+| Jobs | `POST /api/v1/jobs/resumes` | Upload a CV (PDF or Word; private) |
+| Jobs | `POST /api/v1/jobs/{job_id}/apply` | Apply through the portal |
+| Jobs | `POST /api/v1/jobs/{job_id}/close` | Close a job to new applications |
+| Jobs | `POST /api/v1/jobs` | Post a job (reviewed by the career office before it is listed) |
+| Jobs | `PUT /api/v1/jobs/{job_id}/save` | Save a job |
+| Jobs | `PUT /api/v1/jobs/{job_id}` | Edit your job (goes back to review) |
+| Mentorship | `GET /api/v1/mentorship/me` | Your mentor profile (if any) and mentorship summary |
+| Mentorship | `GET /api/v1/mentorship/mentors/{user_id}` | A mentor's profile |
+| Mentorship | `GET /api/v1/mentorship/mentors` | Find a mentor (by industry, expertise, name) |
+| Mentorship | `GET /api/v1/mentorship/requests/{request_id}` | One mentorship (sessions and feedback included) |
+| Mentorship | `GET /api/v1/mentorship/requests` | Your mentorship requests (as mentor or mentee) |
+| Mentorship | `PATCH /api/v1/mentorship/sessions/{session_id}` | Reschedule, cancel or record the outcome of a session |
+| Mentorship | `POST /api/v1/mentorship/me/availability` | Pause or resume taking new mentees |
+| Mentorship | `POST /api/v1/mentorship/requests/{request_id}/cancel` | Cancel your request (mentee) |
+| Mentorship | `POST /api/v1/mentorship/requests/{request_id}/complete` | Mark a mentorship as completed |
+| Mentorship | `POST /api/v1/mentorship/requests/{request_id}/respond` | Accept or decline a request (mentor) |
+| Mentorship | `POST /api/v1/mentorship/requests/{request_id}/sessions` | Schedule a session |
+| Mentorship | `POST /api/v1/mentorship/requests` | Ask a mentor for mentorship |
+| Mentorship | `PUT /api/v1/mentorship/me` | Apply to become a mentor, or update your mentor profile |
+| Mentorship | `PUT /api/v1/mentorship/requests/{request_id}/feedback` | Rate the mentorship |
+| Messaging | `DELETE /api/v1/messages/blocks/{user_id}` | Unblock a member |
+| Messaging | `DELETE /api/v1/messages/conversations/{conv_id}/members/{user_id}` | Leave a conversation, or remove a member (group admins) |
+| Messaging | `DELETE /api/v1/messages/{message_id}/reactions/{emoji}` | Remove your reaction |
+| Messaging | `DELETE /api/v1/messages/{message_id}` | Delete your message (for everyone) |
+| Messaging | `GET /api/v1/messages/attachments/{media_id}` | Download an attachment (conversation members only) |
+| Messaging | `GET /api/v1/messages/blocks` | Members you have blocked |
+| Messaging | `GET /api/v1/messages/conversations/{conv_id}/messages` | Messages, newest page first (cursor `before`), oldest-first within a page |
+| Messaging | `GET /api/v1/messages/conversations/{conv_id}` | One conversation |
+| Messaging | `GET /api/v1/messages/conversations` | Your conversations (most recent first, with unread counts) |
+| Messaging | `GET /api/v1/messages/presence` | Online status of members you share a conversation with |
+| Messaging | `GET /api/v1/messages/unread` | Unread messages in total and per conversation |
+| Messaging | `PATCH /api/v1/messages/conversations/{conv_id}` | Rename a group chat (group admins) |
+| Messaging | `PATCH /api/v1/messages/{message_id}` | Edit your message |
+| Messaging | `POST /api/v1/messages/conversations/direct` | Open (or create) the one-to-one chat with a member |
+| Messaging | `POST /api/v1/messages/conversations/group` | Create a group chat |
+| Messaging | `POST /api/v1/messages/conversations/{conv_id}/delivered` | Acknowledge delivery (up to message_id) |
+| Messaging | `POST /api/v1/messages/conversations/{conv_id}/members` | Add members to a group chat (group admins) |
+| Messaging | `POST /api/v1/messages/conversations/{conv_id}/messages` | Send a message (idempotent with client_id) |
+| Messaging | `POST /api/v1/messages/conversations/{conv_id}/read` | Mark messages as read (up to message_id, default: all) |
+| Messaging | `POST /api/v1/messages/uploads` | Upload an attachment (image or document; private) |
+| Messaging | `PUT /api/v1/messages/blocks/{user_id}` | Block a member (they can no longer message you) |
+| Messaging | `PUT /api/v1/messages/conversations/{conv_id}/settings` | Mute, archive or pin a conversation (for you) |
+| Messaging | `PUT /api/v1/messages/{message_id}/reactions/{emoji}` | React to a message |
+| Public | `GET /api/v1/public/achievements` | Published achievements the members agreed to show publicly |
 | Public | `GET /api/v1/public/site` | Site identity, published branding, enabled modules |
 | Registration | `GET /api/v1/public/batches` | Active batches (for registration and filters) |
 | Registration | `POST /api/v1/auth/register` | Register as an alumnus or current student |

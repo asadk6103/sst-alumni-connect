@@ -85,6 +85,14 @@ async def sync(db: AsyncSession) -> dict:
             db.add(MessageTemplate(key=key, channel=channel, language="en", name=name, subject=subject, body=body,
                                    placeholders=ph))
 
+    # job categories (first start only; admins manage them afterwards)
+    from .models import JobCategory
+    from .modules.jobs.router import DEFAULT_CATEGORIES
+
+    if not (await db.execute(select(JobCategory.id).limit(1))).first():
+        for i, name in enumerate(DEFAULT_CATEGORIES):
+            db.add(JobCategory(name=name, position=i))
+
     # branding
     if not await db.get(BrandingSetting, 1):
         default = Branding().model_dump(mode="json")

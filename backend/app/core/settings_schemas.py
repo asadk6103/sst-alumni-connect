@@ -110,6 +110,11 @@ DASHBOARD_WIDGETS: dict[str, tuple[str, str]] = {
     "suggestions": ("People you may know", "Batchmates and alumni in the same city or industry."),
     "by_country": ("Alumni by country", "Where alumni live today."),
     "by_year": ("Alumni by graduation year", "Registered alumni per graduating class."),
+    "upcoming_events": ("Upcoming events", "Next events and your registrations."),
+    "community_posts": ("Latest community posts", "Recent posts from the community feed."),
+    "latest_jobs": ("Latest job opportunities", "Newest approved jobs and internships."),
+    "achievements": ("Recent achievements", "Recently published alumni achievements."),
+    "mentors": ("Mentorship recommendations", "Mentors matching your industry and interests."),
     "quick_actions": ("Quick actions", "Shortcuts to common tasks."),
 }
 
@@ -196,6 +201,7 @@ DEFAULT_MODULES: dict[str, tuple[str, str]] = {
     "newsletters": ("Newsletters", "Newsletter subscriptions and campaigns."),
     "messaging": ("Messaging", "Private and group chat."),
     "chapters": ("Alumni Chapters", "Regional alumni chapters."),
+    "achievements": ("Alumni Achievements", "Distinguished alumni, success stories and nominations."),
 }
 
 
