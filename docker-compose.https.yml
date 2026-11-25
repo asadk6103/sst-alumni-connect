@@ -1,0 +1,30 @@
+# HTTPS overlay — adds a TLS edge on ports 80/443 in front of the main nginx.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.https.yml up -d
+# Put certs/fullchain.pem and certs/privkey.pem next to this file first (docs/DEPLOYMENT.md → HTTPS).
+services:
+  nginx:
+    # Only the TLS edge is reachable from outside; keep a loopback port for health checks on the host.
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+  tls:
+    image: nginx:1.27.3-alpine
+    restart: unless-stopped
+    depends_on: [nginx]
+    ports:
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_REDIRECT_PORT:-80}:80"
+    volumes:
+      - ./infrastructure/nginx/tls.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./certs/acme:/var/www/acme:ro
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://127.0.0.1/api/v1/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy: { resources: { limits: { memory: 128m } } }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

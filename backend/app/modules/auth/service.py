@@ -167,3 +167,16 @@ def password_expired(user: User, sec: SecuritySettings) -> bool:
     if not sec.password_expiry_days or not user.password_changed_at:
         return False
     return user.password_changed_at + timedelta(days=sec.password_expiry_days) < now()
+
+
+async def check_origin(request: Request, db: AsyncSession) -> None:
+    """Cookie-authenticated endpoints: reject cross-site browser requests (defence in depth on top of SameSite=Strict)."""
+    origin = request.headers.get("origin")
+    if not origin:
+        return  # same-origin navigations and non-browser clients send none
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    if origin.split("://", 1)[-1] == host:
+        return
+    sec = await settings_store.get_group(db, "security")
+    if origin not in sec.allowed_origins:
+        raise AppError(403, "CROSS_SITE_REQUEST", "This request came from another website and was blocked.")

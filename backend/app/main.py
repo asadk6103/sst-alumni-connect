@@ -21,7 +21,7 @@ from .modules.admin import media as admin_media
 from .modules.admin import roles as admin_roles
 from .modules.admin import users as admin_users
 from .modules.administration import custom_fields as custom_fields_api
-from .modules.administration import localization, reports
+from .modules.administration import localization, privacy, reports
 from .modules.alumni import admin as alumni_admin
 from .modules.alumni import batches as alumni_batches
 from .modules.alumni import dashboard as alumni_dashboard
@@ -184,6 +184,8 @@ def create_app() -> FastAPI:
         news_api.router,
         cms_site.admin,
         cms_site.public,
+        privacy.router,
+        privacy.admin,
     ):
         app.include_router(r)
     app.router.routes.append(Route("/metrics", metrics_endpoint, include_in_schema=False))

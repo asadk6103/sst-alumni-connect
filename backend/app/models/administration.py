@@ -121,3 +121,18 @@ class Translation(Base):
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+# ── privacy ─────────────────────────────────────────────────────────────────
+class PrivacyRequest(UUIDPk, Base):
+    """A member's request to delete their account (data exports are immediate and only audit-logged)."""
+
+    __tablename__ = "privacy_requests"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="deletion")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending | completed | rejected | cancelled
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    admin_note: Mapped[str | None] = mapped_column(String(1000))
+    handled_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

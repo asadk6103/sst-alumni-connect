@@ -77,6 +77,7 @@ const MessagesAdminPage = lazy(() => web().then((m) => ({ default: m.MessagesAdm
 const adm = () => import('@/pages/admin/Administration');
 const CustomFieldsAdminPage = lazy(() => adm().then((m) => ({ default: m.CustomFieldsAdminPage })));
 const ReportsPage = lazy(() => adm().then((m) => ({ default: m.ReportsPage })));
+const PrivacyAdminPage = lazy(() => import('@/pages/portal/Privacy').then((m) => ({ default: m.PrivacyAdminPage })));
 const newsp = () => import('@/pages/portal/News');
 const NewsPage = lazy(() => newsp().then((m) => ({ default: m.NewsPage })));
 const ArticlePage = lazy(() => newsp().then((m) => ({ default: m.ArticlePage })));
@@ -137,6 +138,7 @@ export function App() {
         <Route path="website/messages" element={<RequirePerm perms={perm('/admin/website/messages')}><MessagesAdminPage /></RequirePerm>} />
         <Route path="custom-fields" element={<RequirePerm perms={perm('/admin/custom-fields')}><CustomFieldsAdminPage /></RequirePerm>} />
         <Route path="reports/:key?" element={<RequirePerm perms={perm('/admin/reports')}><ReportsPage /></RequirePerm>} />
+        <Route path="privacy" element={<RequirePerm perms={perm('/admin/privacy')}><PrivacyAdminPage /></RequirePerm>} />
         <Route path="users" element={<RequirePerm perms={perm('/admin/users')}><UsersPage /></RequirePerm>} />
         <Route path="roles" element={<RequirePerm perms={perm('/admin/roles')}><RolesPage /></RequirePerm>} />
         <Route path="media" element={<RequirePerm perms={perm('/admin/media')}><MediaPage /></RequirePerm>} />

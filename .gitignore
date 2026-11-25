@@ -19,3 +19,5 @@ __pycache__/
 .ruff_cache/
 .venv/
 docs/screenshots/tmp/
+certs/*
+!certs/.gitkeep

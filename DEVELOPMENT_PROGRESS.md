@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-25 · Current stage: **6 — Production readiness (next)** · Stages 1–5 complete
+Last updated: 2026-11-25 · Current stage: **Web platform complete** (Stages 1–6) · next: mobile app
 
 ## Stage plan
 
@@ -11,11 +11,27 @@ Last updated: 2026-11-25 · Current stage: **6 — Production readiness (next)**
 | 3 Engagement | community feed (real-time), messaging, groups, events + QR check-in, jobs, mentorship, achievements | ✅ built & tested locally |
 | 4 Institutional | donations (gateway-less until providers are chosen), scholarships, newsletters, notifications, gallery | ✅ built & tested locally |
 | 5 Administration | CMS + drag-and-drop page builder, navigation builder, custom fields, localisation (Urdu/RTL), reports & exports | ✅ built & tested locally |
-| 6 Production readiness | security testing, load tests at target scale, HTTPS overlay, handbooks, ERD, checklist | ⏳ |
+| 6 Production readiness | security testing, load tests at target scale, HTTPS overlay, handbooks, ERD, checklist | ✅ built & tested locally; Docker validation on the server |
 
 Decisions: FastAPI backend (architectural revision), Next.js for public pages + React/Vite for portal/admin,
 payments on hold, generic HTTP SMS provider, students both self-register and are imported, p95 latency
 budget 200 ms for API reads.
+
+## Completed (Stage 6 — Production readiness)
+
+**Security** — new test suite sweeps every admin route (members get 401/403 for every method) and every private
+route (anonymous → 401/403), injection payloads in all search boxes, security headers, cross-site cookie requests
+(new Origin check on refresh / logout), object-level access (donations, receipts, conversations, private files).
+**Privacy** — members download all their data (JSON, audit-logged, secrets excluded) and request account deletion
+(password confirmation); administrators approve (anonymisation: identity, profile, network, files and preferences
+erased; posts/messages show "Deleted member"; donation records kept without name; signed out everywhere) or decline
+with a reason. Migration `0007_privacy`.
+**HTTPS** — `docker-compose.https.yml` TLS edge (80 → 443 redirect, HSTS, TLS 1.2/1.3, WebSocket, Let's Encrypt
+webroot), `make up-https`.
+**Performance** — k6 load test extended to the member screens and website (p95 < 200 ms thresholds); local service
+times recorded in the testing report.
+**Documentation** — deployment guide (HTTPS), production checklist, backup & restore guide, generated ERD (81 tables)
+and API reference (394 endpoints + OpenAPI JSON), administrator handbook, member guide, testing report.
 
 ## Completed (Stage 5 — Administration)
 
@@ -214,6 +230,12 @@ dev and prod overlays, scripts (install, upgrade, backup, restore, health, logs,
   scholarship_awards, newsletter_subscribers, newsletters, newsletter_deliveries, gallery_albums, gallery_photos.
 - `0006_administration` — cms_pages, news_posts, nav_menus, contact_messages, custom_fields, languages, translations;
   `custom_fields` JSONB on alumni_profiles, job_posts, events, mentors, donations.
+
+## Test results — Stage 6 (2026-11-25, local)
+- Backend automated tests: **51 passed** (adds 7 security / privacy tests). Lint clean; both frontends type-check.
+- Browser walk-through (`e2e-stage6.mjs`): data download → deletion request → admin approval → account signed out →
+  mobile: **pass, no page errors**. Full report: [docs/TESTING_REPORT.md](docs/TESTING_REPORT.md).
+- Docker deployment validation is run on the target server (commands in the testing report §5).
 
 ## Test results — Stage 5 (2026-11-25, local)
 - Backend automated tests: **44 passed** (adds pages draft / preview / publish / schedule / home-page protection and

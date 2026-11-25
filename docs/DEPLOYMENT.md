@@ -56,11 +56,27 @@ Lost the code? `docker compose exec api python -m app.cli setup-code`.
 Locked out? `docker compose exec -it api python -m app.cli reset-password <email>` or `create-admin <email> "<name>"`.
 
 ## HTTPS
-Run nginx behind a TLS-terminating proxy or load balancer that forwards `X-Forwarded-Proto: https`
-(the API uses it for secure cookies). Set the Application URL to the `https://` address in
-System Configuration → General.
+Built in: a TLS edge (`docker-compose.https.yml`) listens on 80/443, redirects HTTP to HTTPS, sends HSTS and forwards
+to nginx with `X-Forwarded-Proto: https` (secure cookies). WebSockets work through it.
+
+1. Point the domain's DNS to the server.
+2. Get a certificate. With Let's Encrypt (first time, nothing listening on port 80 yet):
+   ```
+   docker run --rm -p 80:80 -v "$PWD/certs:/etc/letsencrypt" certbot/certbot certonly --standalone      -d alumni.example.org --agree-tos -m it@example.org --non-interactive
+   cp certs/live/alumni.example.org/fullchain.pem certs/live/alumni.example.org/privkey.pem certs/
+   ```
+   Or copy the institution's certificate to `certs/fullchain.pem` and `certs/privkey.pem`.
+3. `make up-https` (production sizing + TLS edge). The main nginx is then bound to `127.0.0.1:8080` only.
+4. Set System Configuration → General → Application URL to `https://alumni.example.org`.
+5. Renewal (monthly cron; uses the webroot served by the edge):
+   ```
+   docker run --rm -v "$PWD/certs:/etc/letsencrypt" -v "$PWD/certs/acme:/var/www/acme" certbot/certbot renew      --webroot -w /var/www/acme && cp certs/live/*/fullchain.pem certs/live/*/privkey.pem certs/      && docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.https.yml exec tls nginx -s reload
+   ```
+Behind an existing load balancer instead: skip the overlay and forward `X-Forwarded-Proto: https` to port 8080.
 
 ## Backups
+Full guide: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
+
 `make backup` writes `backups/<timestamp>/` with `database.dump`, `storage.tar.gz`, `objects.tar.gz`,
 `app-config.tar.gz` (needed to decrypt stored credentials) and `SHA256SUMS`. Keep copies off the server
 and encrypted — they contain personal data. Restore with `make restore b=backups/<timestamp>`.

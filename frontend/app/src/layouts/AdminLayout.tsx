@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Activity, BarChart3, Inbox, LayoutTemplate, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
+import { UserX, Activity, BarChart3, Inbox, LayoutTemplate, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
   X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
@@ -31,6 +31,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3, perms: ['reports.view'] },
   { to: '/admin/custom-fields', label: 'Custom Fields', icon: ListPlus, perms: ['custom_fields.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },
+  { to: '/admin/privacy', label: 'Privacy Requests', icon: UserX, perms: ['users.view'] },
   { to: '/admin/roles', label: 'Roles & Permissions', icon: KeyRound, perms: ['roles.view'] },
   { to: '/admin/media', label: 'Media Library', icon: ImageIcon, perms: ['media.view'] },
   { to: '/admin/communications', label: 'Communication Center', icon: Mail, perms: ['communications.view'] },

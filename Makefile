@@ -4,7 +4,7 @@ COMPOSE := docker compose
 PROD_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 
 .PHONY: help install up up-prod down ps logs errors health migrate bootstrap setup-code backup restore upgrade \
-        scale dev loadtest
+        scale dev loadtest up-https
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -17,6 +17,9 @@ up:              ## Start / update the stack
 
 up-prod:         ## Start with production sizing (replicas, pools)
 	$(PROD_COMPOSE) up -d --build
+
+up-https:        ## Production sizing + HTTPS edge on 80/443 (certs/ must contain fullchain.pem + privkey.pem)
+	$(PROD_COMPOSE) -f docker-compose.https.yml up -d --build
 
 down:            ## Stop (data volumes are kept)
 	$(COMPOSE) down

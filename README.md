@@ -36,7 +36,10 @@ passwords and the application keys are generated on first start. Everything else
 | p95 load test | `make loadtest email=<admin> password=<password> VUS=200 P95_MS=200` |
 | Stop (data kept) | `docker compose down` |
 
-More: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · API reference at `/api/docs`.
+Documentation:
+- [Deployment guide](docs/DEPLOYMENT.md) (incl. HTTPS) · [Production checklist](docs/PRODUCTION_CHECKLIST.md) · [Backup & restore](docs/BACKUP_RESTORE.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Database ERD](docs/ERD.md) · [API reference](docs/API.md) (interactive at `/api/docs`)
+- [Administrator handbook](docs/ADMIN_HANDBOOK.md) · [Member guide](docs/USER_HANDBOOK.md) · [Testing report](docs/TESTING_REPORT.md)
 
 ## Local development without Docker
 

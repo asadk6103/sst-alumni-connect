@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
-import { CheckCircle2, KeyRound, Laptop, LogOut, Phone, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
+import { Database, CheckCircle2, KeyRound, Laptop, LogOut, Phone, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
 import { api, ApiError, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useAction } from '@/lib/hooks';
@@ -13,6 +13,7 @@ import { Alert, Avatar, Badge, Card, CardHeader, PageHeader, Skeleton } from '@/
 import { Field, Input, PasswordInput, Select } from '@/components/ui/form';
 import { Dialog, useConfirm } from '@/components/ui/overlay';
 import { PasswordChecklist, passwordRules } from '@/pages/auth/pages';
+import { PrivacySection } from './Privacy';
 
 export function AccountPage() {
   const { section = 'profile' } = useParams();
@@ -28,13 +29,13 @@ export function AccountPage() {
       )}
       <div className="grid gap-6 lg:grid-cols-[230px_1fr]">
         <Card className="h-fit p-2">
-          {[{ k: 'profile', l: 'Profile', i: UserRound, to: '/portal/account' }, { k: 'security', l: 'Security', i: ShieldCheck, to: '/portal/account/security' }].map((x) => (
+          {[{ k: 'profile', l: 'Profile', i: UserRound, to: '/portal/account' }, { k: 'security', l: 'Security', i: ShieldCheck, to: '/portal/account/security' }, { k: 'privacy', l: 'Your data', i: Database, to: '/portal/account/privacy' }].map((x) => (
             <NavLink key={x.k} to={x.to} end className={cn('flex items-center gap-2.5 rounded-btn px-3 py-2 text-sm', section === x.k ? 'bg-primary-soft font-medium text-primary' : 'text-ink hover:bg-canvas')}>
               <x.i className="h-4 w-4" />{x.l}
             </NavLink>
           ))}
         </Card>
-        <div className="min-w-0 space-y-6">{section === 'security' ? <SecuritySection /> : <ProfileSection />}</div>
+        <div className="min-w-0 space-y-6">{section === 'security' ? <SecuritySection /> : section === 'privacy' ? <PrivacySection /> : <ProfileSection />}</div>
       </div>
     </>
   );
