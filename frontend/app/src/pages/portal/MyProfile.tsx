@@ -54,7 +54,7 @@ export function MyProfilePage() {
             </Card>
             <Card className="flex gap-1 overflow-x-auto p-2 lg:block lg:space-y-0.5">
               {TABS.filter((t) => t.key !== 'more' || !!extra.data?.length).map((t) => (
-                <button key={t.key} onClick={() => nav(`/portal/profile/${t.key}`)} aria-current={tab === t.key ? 'page' : undefined}
+                <button key={t.key} onClick={() => nav(`/portal/profile/edit/${t.key}`)} aria-current={tab === t.key ? 'page' : undefined}
                   className={cn('flex shrink-0 items-center gap-2.5 rounded-btn px-3 py-2 text-left text-sm lg:w-full',
                     tab === t.key ? 'bg-primary-soft font-medium text-primary' : 'text-ink hover:bg-canvas')}>
                   <t.icon className="h-4 w-4" />{t.label}

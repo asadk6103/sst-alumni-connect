@@ -5,7 +5,7 @@ import unicodedata
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core import settings_store
@@ -309,7 +309,59 @@ async def relations(db: AsyncSession, me: uuid.UUID, ids: list[uuid.UUID]) -> di
         await db.execute(select(AlumniFollow.followee_id).where(AlumniFollow.follower_id == me, AlumniFollow.followee_id.in_(ids)))
     ).all():
         out[fid]["following"] = True
+    mutual = await mutual_connections(db, me, ids)
+    online = await online_connections(db, me, ids, out)
+    faces_ids = {x for v in mutual.values() for x in v[:3]}
+    faces = {}
+    if faces_ids:
+        for u, pr in (
+            await db.execute(
+                select(User, AlumniProfile).join(AlumniProfile, AlumniProfile.user_id == User.id).where(User.id.in_(faces_ids))
+            )
+        ).all():
+            faces[u.id] = {"id": str(u.id), "full_name": u.full_name, "photo": await photo_out(db, pr.photo_id)}
+    for i in ids:
+        out[i]["mutual"] = len(mutual.get(i, []))
+        out[i]["mutual_ids"] = [str(x) for x in mutual.get(i, [])[:3]]
+        out[i]["mutual_people"] = [faces[x] for x in mutual.get(i, [])[:3] if x in faces]
+        out[i]["online"] = online.get(i, False)
     return out
+
+
+async def mutual_connections(db: AsyncSession, me: uuid.UUID, ids: list[uuid.UUID]) -> dict[uuid.UUID, list[uuid.UUID]]:
+    """For each member, the viewer's connections they are also connected to."""
+    mine = await connected_ids(db, me)
+    if not mine or not ids:
+        return {}
+    C = AlumniConnection
+    rows = (
+        await db.execute(
+            select(C.requester_id, C.addressee_id).where(
+                C.status == "accepted",
+                or_(and_(C.requester_id.in_(ids), C.addressee_id.in_(mine)), and_(C.addressee_id.in_(ids), C.requester_id.in_(mine))),
+            )
+        )
+    ).all()
+    out: dict = {}
+    idset = set(ids)
+    for a, b in rows:
+        person, common = (a, b) if a in idset and b in mine else (b, a)
+        if person != me:
+            out.setdefault(person, []).append(common)
+    return out
+
+
+async def online_connections(db: AsyncSession, me: uuid.UUID, ids: list[uuid.UUID], rel: dict) -> dict[uuid.UUID, bool]:
+    """Presence is shown for connections only (members choose more in Settings)."""
+    from ..messaging.service import online_many
+
+    targets = [i for i in ids if rel.get(i, {}).get("connection") == "accepted"]
+    if not targets:
+        return {}
+    try:
+        return await online_many(targets)
+    except Exception:
+        return {}
 
 
 # ── completion and search ───────────────────────────────────────────────────
@@ -448,6 +500,10 @@ async def detail(db: AsyncSession, user: User, profile: AlumniProfile, viewer: V
             "followers": followers,
             "connections": connections,
             "member_since": user.created_at,
+            "cover": await photo_out(db, profile.cover_id),
+            "following_count": (
+                await db.execute(select(func.count()).select_from(AlumniFollow).where(AlumniFollow.follower_id == uid))
+            ).scalar_one(),
             "is_self": uid == viewer.p.id,
         }
     )

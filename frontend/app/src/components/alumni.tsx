@@ -218,7 +218,7 @@ export function NoAccess({ title = 'Available to verified alumni', children }: {
     <Card>
       <EmptyState icon={BadgeCheck} title={title}
         description={children ?? 'The directory and connections open once your profile is verified by the alumni office.'}
-        action={<Button asChild><Link to="/portal/profile/verification">Check verification status</Link></Button>} />
+        action={<Button asChild><Link to="/portal/profile/edit/verification">Check verification status</Link></Button>} />
     </Card>
   );
 }

@@ -64,6 +64,8 @@ def _process_image(data: bytes, mime: str) -> tuple[bytes, int, int, list[tuple[
         img = Image.open(io.BytesIO(data))
         img.verify()
         img = Image.open(io.BytesIO(data))
+        if mime not in ("image/x-icon", "image/vnd.microsoft.icon", "image/gif"):
+            img.load()  # decode now so corrupt pixel data is a 415, not a 500
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as e:
         raise AppError(415, "INVALID_IMAGE", "The image could not be read.") from e
     if mime in ("image/x-icon", "image/vnd.microsoft.icon", "image/gif"):

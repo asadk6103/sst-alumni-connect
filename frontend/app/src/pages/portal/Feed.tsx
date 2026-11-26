@@ -79,7 +79,7 @@ function FeedAside({ dash, groups }: { dash?: Dash; groups: GroupT[] }) {
           <p className="mt-2 font-heading text-lg font-semibold text-ink">{me?.full_name}</p>
           <p className="text-sm text-ink-muted">{me ? [me.kind === 'student' ? 'Student' : 'Alumni', me.batch ?? (me.graduation_year ? `Class of ${me.graduation_year}` : null)].filter(Boolean).join(' • ') : ' '}</p>
           <div className="mt-4 grid grid-cols-3 divide-x divide-line border-t border-line pt-3 text-center rtl:divide-x-reverse">
-            {[['Connections', me?.connections, '/portal/connections'], ['Groups', me?.groups, '/portal/community/groups'], ['Events', me?.events, '/portal/events']].map(([l, n, to]) => (
+            {[['Connections', me?.connections, '/portal/network/connections'], ['Groups', me?.groups, '/portal/community/groups'], ['Events', me?.events, '/portal/events']].map(([l, n, to]) => (
               <Link key={l as string} to={to as string} className="hover:text-primary"><p className="font-heading text-lg font-semibold text-ink">{(n as number | undefined) ?? '–'}</p><p className="text-xs text-ink-muted">{l}</p></Link>))}
           </div>
         </div>

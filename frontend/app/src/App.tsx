@@ -15,7 +15,9 @@ const RegisterPage = lazy(() => import('@/pages/auth/Register').then((m) => ({ d
 const DirectoryPage = lazy(() => import('@/pages/portal/Directory').then((m) => ({ default: m.DirectoryPage })));
 const ProfileViewPage = lazy(() => import('@/pages/portal/Profile').then((m) => ({ default: m.ProfileViewPage })));
 const MyProfilePage = lazy(() => import('@/pages/portal/MyProfile').then((m) => ({ default: m.MyProfilePage })));
-const ConnectionsPage = lazy(() => import('@/pages/portal/Connections').then((m) => ({ default: m.ConnectionsPage })));
+const MyProfileViewPage = lazy(() => import('@/pages/portal/Profile').then((m) => ({ default: m.MyProfileViewPage })));
+const MyNetworkPage = lazy(() => import('@/pages/portal/Network').then((m) => ({ default: m.MyNetworkPage })));
+const FindAlumniPage = lazy(() => import('@/pages/portal/Network').then((m) => ({ default: m.FindAlumniPage })));
 const SavedPostsPage = lazy(() => import('@/pages/portal/Feed').then((m) => ({ default: m.SavedPostsPage })));
 const community = () => import('@/pages/portal/Community');
 const CommunityPage = lazy(() => community().then((m) => ({ default: m.CommunityPage })));
@@ -145,11 +147,13 @@ export function App() {
       <Route path="/portal" element={<RequireAuth><PortalLayout /></RequireAuth>}>
         <Route index element={<FeedPage />} />
         <Route path="saved" element={<Lazy><SavedPostsPage /></Lazy>} />
-        <Route path="network/:tab?" element={<Lazy><ConnectionsPage /></Lazy>} />
+        <Route path="network/find" element={<Lazy><FindAlumniPage /></Lazy>} />
+        <Route path="network/:tab?" element={<Lazy><MyNetworkPage /></Lazy>} />
         <Route path="directory" element={<Lazy><DirectoryPage /></Lazy>} />
         <Route path="alumni/:id" element={<Lazy><ProfileViewPage /></Lazy>} />
-        <Route path="profile/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
-        <Route path="connections/:tab?" element={<Lazy><ConnectionsPage /></Lazy>} />
+        <Route path="profile" element={<Lazy><MyProfileViewPage /></Lazy>} />
+        <Route path="profile/edit/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
+        <Route path="connections/:tab?" element={<Navigate to="/portal/network" replace />} />
         <Route path="community" element={<Lazy><CommunityPage /></Lazy>} />
         <Route path="community/groups" element={<Lazy><GroupsPage /></Lazy>} />
         <Route path="community/groups/:id" element={<Lazy><GroupPage /></Lazy>} />

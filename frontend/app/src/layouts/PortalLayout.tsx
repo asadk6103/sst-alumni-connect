@@ -58,7 +58,7 @@ function Promo({ onInvite }: { onInvite: () => void }) {
       : path.startsWith('/portal/jobs') ? { title: t('promo.jobs', 'Hire from the SST Alumni Network'), text: 'Post job openings, find talented alumni and grow your team.', label: '+ Post a Job', icon: Briefcase, go: '/portal/jobs/post' }
         : path.startsWith('/portal/mentorship') ? { title: t('promo.mentor', 'Become a Mentor'), text: 'Share your experience, guide fellow alumni and give back to the SST community.', label: '+ Join as a Mentor', icon: GraduationCap, go: '/portal/mentorship/tab/become' }
           : path.startsWith('/portal/directory') ? { title: t('promo.directory', 'Explore the Alumni Network'), text: 'Find, connect and collaborate with SST alumni across the globe.', label: 'Find Alumni', icon: Search, go: '/portal/directory' }
-            : path.startsWith('/portal/profile') ? { title: t('promo.profile', 'Complete Your Alumni Profile'), text: 'A complete profile helps you get better connections and opportunities.', label: 'Update Profile', icon: UserRound, go: '/portal/profile/personal' }
+            : path.startsWith('/portal/profile') ? { title: t('promo.profile', 'Complete Your Alumni Profile'), text: 'A complete profile helps you get better connections and opportunities.', label: 'Update Profile', icon: UserRound, go: '/portal/profile/edit/personal' }
               : null;
   const Icon = card?.icon ?? Users;
   return (

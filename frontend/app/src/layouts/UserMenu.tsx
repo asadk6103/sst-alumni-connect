@@ -23,7 +23,7 @@ export function UserMenu({ light }: { light?: boolean }) {
         </MenuLabel>
         <MenuSeparator />
         <MenuItem onSelect={() => nav('/portal/profile')}><UserRound />{t('menu.my_profile', 'My profile')}</MenuItem>
-        {can('portal.directory') && <MenuItem onSelect={() => nav('/portal/connections')}><Users />{t('menu.my_network', 'My network')}</MenuItem>}
+        {can('portal.directory') && <MenuItem onSelect={() => nav('/portal/network')}><Users />{t('menu.my_network', 'My network')}</MenuItem>}
         <MenuItem onSelect={() => nav('/portal/achievements')}><Medal />{t('menu.achievements', 'Achievements')}</MenuItem>
         <MenuItem onSelect={() => nav('/portal/donations')}><HandHeart />{t('menu.giving', 'Donations & giving')}</MenuItem>
         <MenuItem onSelect={() => nav('/portal/news')}><Newspaper />{t('nav.news', 'News')}</MenuItem>

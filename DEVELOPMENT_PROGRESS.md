@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-25 · Current stage: **Portal redesign — phase 1 of 6 done** (Stages 1–6 complete) · then: mobile app
+Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 2 of 6 done** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -32,7 +32,18 @@ shared events / jobs, connections-only audience, saved posts, "not interested", 
 @mentions (notified), comment reactions, emoji; Invite Alumni (emails or CSV / vCard import, inviter notified on join).
 Migration `0009_feed`. Tests: 55 backend; browser walk-through `e2e-redesign-1.mjs` passes (desktop + 390 px).
 
-Next phases: 2 Network / Find Alumni / Directory / Profile · 3 Communities · 4 Events / Jobs / Mentorship ·
+**Phase 2 (done)** — My Network (overview, connections, requests, suggestions, following, followers tabs with counts);
+Find Alumni (filter chips, All / People You May Know / Same Batch / Same City / Same Industry tabs, list and grid views,
+mutual connections, More Filters, network summary and batch aside); Alumni Directory (infinite scroll, filter accordion
+with counts, multi-select batch / city / industry / company / designation / country, community filter, totals);
+profile page (cover photo, photo upload, Overview / Posts / About / Experience / Education / Mentorship / Activity tabs,
+profile-completion checklist, network / communities / photos asides). `/portal/connections` now redirects to
+My Network; the profile editor moved to `/portal/profile/edit/:tab`. New API: `alumni/network/summary`,
+`alumni/suggestions`, `alumni/me/cover`, `alumni/profiles/{id}/overview|activity`, feed `author_id`, directory
+`years` / `group` and multi-value filters. Corrupt images now return 415 instead of 500. Migration `0010_profile`.
+Tests: 58 backend; browser walk-through `e2e-redesign-2.mjs` passes (desktop + 390 px).
+
+Next phases: 3 Communities · 4 Events / Jobs / Mentorship ·
 5 Resources hub + Messages · 6 Settings (all sections), support tickets and FAQs.
 
 ## Completed (Stage 6 — Production readiness)

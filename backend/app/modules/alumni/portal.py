@@ -24,6 +24,7 @@ from ...models import (
     AlumniProfile,
     AlumniSkill,
     Batch,
+    DiscussionGroup,
     Media,
     ProfileReport,
     User,
@@ -80,6 +81,9 @@ async def own_profile(db: AsyncSession, user: User, profile: AlumniProfile) -> d
             "privacy_sections": svc.PRIVACY_SECTIONS,
             "completion": score,
             "completion_missing": missing,
+            "completion_items": [
+                {"key": k, "label": label, "tab": tab, "done": k not in {m["key"] for m in missing}} for k, _w, label, tab in svc.COMPLETION
+            ],
             "locked_fields": sorted(svc.lock_identity_fields(profile)),
             "verification": {
                 "status": profile.verification_status,
@@ -393,13 +397,15 @@ async def search_directory(
     year: int | None = Query(None, ge=1900, le=2100),
     year_from: int | None = Query(None, ge=1900, le=2100),
     year_to: int | None = Query(None, ge=1900, le=2100),
-    profession: str | None = Query(None, max_length=100),
-    organization: str | None = Query(None, max_length=100),
-    industry: str | None = Query(None, max_length=100),
-    country: str | None = Query(None, max_length=100),
-    city: str | None = Query(None, max_length=100),
+    profession: str | None = Query(None, max_length=600),
+    organization: str | None = Query(None, max_length=600),
+    industry: str | None = Query(None, max_length=600),
+    country: str | None = Query(None, max_length=600),
+    city: str | None = Query(None, max_length=600),
     kind: Literal["alumni", "student"] | None = None,
     verified_only: bool = False,
+    group: uuid.UUID | None = None,
+    years: str | None = Query(None, max_length=200, pattern=r"^\d{4}(,\d{4})*$"),
     sort: Literal["relevance", "name", "-year", "year", "recent"] = "relevance",
     p: PageParams = Depends(page_params),
     me: Principal = Depends(require("portal.directory")),
@@ -437,6 +443,14 @@ async def search_directory(
         stmt = stmt.where(AlumniProfile.kind == kind)
     if verified_only:
         stmt = stmt.where(AlumniProfile.verification_status == "verified")
+    if years:
+        stmt = stmt.where(AlumniProfile.graduation_year.in_([int(y) for y in years.split(",")][:20]))
+    if group:
+        from ...models import GroupMember
+
+        stmt = stmt.where(
+            AlumniProfile.user_id.in_(select(GroupMember.user_id).where(GroupMember.group_id == group, GroupMember.status == "active"))
+        )
     # Filters on private sections only match members who show that section to everyone.
     for value, col, public in (
         (profession, AlumniProfile.designation, _career_public),
@@ -446,11 +460,12 @@ async def search_directory(
         (city, AlumniProfile.city, _location_public),
     ):
         if value:
-            cond = (
-                func.lower(col).like(f"%{value.strip().lower().replace('%', '').replace('_', '')}%")
-                if col in (AlumniProfile.designation, AlumniProfile.organization)
-                else func.lower(col) == value.strip().lower()
-            )
+            # several values separated by "|" (checkbox filters) match any of them
+            values = [v.strip().lower() for v in value.split("|") if v.strip()][:20]
+            if col in (AlumniProfile.designation, AlumniProfile.organization):
+                cond = or_(*[func.lower(col).like(f"%{v.replace('%', '').replace('_', '')}%") for v in values])
+            else:
+                cond = func.lower(col).in_(values)
             stmt = stmt.where(cond if staff else and_(cond, public()))
     order = {
         "name": [User.full_name.asc()],
@@ -505,6 +520,19 @@ async def facets(_: Principal = Depends(require("portal.directory")), db: AsyncS
             "countries": await top("country", "location"),
             "cities": await top("city", "location", 80),
             "industries": await top("industry", "career"),
+            "organizations": await top("organization", "career", 40),
+            "designations": await top("designation", "career", 40),
+            "groups": [
+                {"id": str(g.id), "name": g.name, "count": g.member_count}
+                for g in (
+                    await db.execute(
+                        select(DiscussionGroup)
+                        .where(DiscussionGroup.status == "active")
+                        .order_by(DiscussionGroup.member_count.desc())
+                        .limit(30)
+                    )
+                ).scalars()
+            ],
             "years": [{"value": y, "count": n} for y, n in years],
             "batches": [{"id": str(b.id), "name": b.name, "graduation_year": b.graduation_year} for b in batches],
         }

@@ -43,6 +43,7 @@ def _text(v):
 async def feed(
     filter: Literal["all", "following", "batch", "groups", "announcements", "mine"] = "all",
     sort: Literal["latest", "relevant"] = "latest",
+    author_id: uuid.UUID | None = None,
     group_id: uuid.UUID | None = None,
     cursor: str | None = None,
     limit: int = Query(15, ge=1, le=50),
@@ -66,7 +67,9 @@ async def feed(
         stmt = stmt.where(Post.kind == "announcement")
     elif filter == "mine":
         stmt = stmt.where(Post.author_id == p.id)
-    elif filter == "groups":
+    if author_id:
+        stmt = stmt.where(Post.author_id == author_id)
+    if filter == "groups":
         stmt = stmt.where(Post.group_id.in_(await svc.member_group_ids(db, p.id) or [uuid.UUID(int=0)]))
     elif filter == "batch":
         from ...models import AlumniProfile

@@ -64,6 +64,7 @@ class AlumniProfile(Timestamps, Base):
     industry: Mapped[str | None] = mapped_column(String(100), index=True)
     bio: Mapped[str | None] = mapped_column(Text)
     photo_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media_library.id", ondelete="SET NULL"))
+    cover_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media_library.id", ondelete="SET NULL"))
     website: Mapped[str | None] = mapped_column(String(300))
     linkedin: Mapped[str | None] = mapped_column(String(300))
     # Profile visibility (members | connections | hidden) and per-section visibility (members | connections | only_me).

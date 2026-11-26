@@ -25,6 +25,7 @@ from .modules.administration import localization, privacy, reports
 from .modules.alumni import admin as alumni_admin
 from .modules.alumni import batches as alumni_batches
 from .modules.alumni import dashboard as alumni_dashboard
+from .modules.alumni import network as alumni_network
 from .modules.alumni import portal as alumni_portal
 from .modules.alumni import records as alumni_records
 from .modules.alumni import registration as alumni_registration
@@ -182,6 +183,7 @@ def create_app() -> FastAPI:
         privacy.admin,
         notifications_api.devices,
         search.router,
+        alumni_network.router,
         invitations.router,
     ):
         app.include_router(r)
