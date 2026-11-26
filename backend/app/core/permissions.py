@@ -21,6 +21,7 @@ ADMIN_MODULES: dict[str, tuple[str, list[str]]] = {
     "scholarships": ("Scholarships", ["view", "create", "edit", "delete", "export"]),
     "achievements": ("Alumni achievements", ["view", "create", "edit", "delete", "approve", "reject", "publish"]),
     "news": ("News and announcements", ["view", "create", "edit", "delete", "publish"]),
+    "resources": ("Resource hub", ["view", "create", "edit", "delete", "approve", "reject"]),
     "gallery": ("Gallery", ["view", "create", "edit", "delete", "publish"]),
     "cms": ("Pages and content", ["view", "create", "edit", "delete", "publish"]),
     "navigation": ("Navigation builder", ["view", "edit"]),
@@ -55,6 +56,7 @@ PORTAL_PERMISSIONS: dict[str, str] = {
     "portal.events.register": "Register for events",
     "portal.donate": "Make donations",
     "portal.nominate": "Nominate alumni for achievements",
+    "portal.resources.upload": "Share resources (reviewed before they are listed)",
 }
 
 
@@ -92,7 +94,15 @@ MEMBER_BASE = {
     "portal.events.register",
     "portal.donate",
 }
-CONTENT = ("news", "gallery", "cms", "media", "achievements", "navigation")
+ALUMNI_EXTRA = {
+    "portal.jobs.apply",
+    "portal.jobs.post",
+    "portal.mentorship.request",
+    "portal.mentorship.mentor",
+    "portal.nominate",
+    "portal.resources.upload",
+}
+CONTENT = ("news", "gallery", "cms", "media", "achievements", "navigation", "resources")
 
 # key: (name, description, is_staff, default permissions)
 DEFAULT_ROLES: dict[str, tuple[str, str, bool, set[str]]] = {
@@ -162,13 +172,13 @@ DEFAULT_ROLES: dict[str, tuple[str, str, bool, set[str]]] = {
         "Alumni Chapter Head",
         "Leads a regional alumni chapter.",
         False,
-        MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request", "portal.mentorship.mentor", "portal.nominate"},
+        MEMBER_BASE | ALUMNI_EXTRA,
     ),
     "verified_alumni": (
         "Verified Alumni",
         "Verified former student of SST.",
         False,
-        MEMBER_BASE | {"portal.jobs.apply", "portal.jobs.post", "portal.mentorship.request", "portal.mentorship.mentor", "portal.nominate"},
+        MEMBER_BASE | ALUMNI_EXTRA,
     ),
     "unverified_alumni": (
         "Unverified Alumni",

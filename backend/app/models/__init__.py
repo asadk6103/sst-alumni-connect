@@ -95,8 +95,14 @@ from .messaging import (
     MessageReaction,
     MessageReceipt,
 )
+from .resources import Resource, ResourceCollection, ResourceCollectionItem, ResourceDownload, ResourceSave
 
 __all__ = [
+    "Resource",
+    "ResourceCollection",
+    "ResourceCollectionItem",
+    "ResourceDownload",
+    "ResourceSave",
     "SavedPost",
     "PostTag",
     "PollVote",

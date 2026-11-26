@@ -21,6 +21,8 @@ const FindAlumniPage = lazy(() => import('@/pages/portal/Network').then((m) => (
 const SavedPostsPage = lazy(() => import('@/pages/portal/Feed').then((m) => ({ default: m.SavedPostsPage })));
 const community = () => import('@/pages/portal/Community');
 const communities = () => import('./pages/portal/Communities');
+const ResourcesAdminPage = lazy(() => import('./pages/admin/Resources').then((m) => ({ default: m.ResourcesAdminPage })));
+const ResourcesPage = lazy(() => import('./pages/portal/Resources').then((m) => ({ default: m.ResourcesPage })));
 const GroupsPage = lazy(() => communities().then((m) => ({ default: m.GroupsPage })));
 const GroupPage = lazy(() => communities().then((m) => ({ default: m.GroupPage })));
 const PostPage = lazy(() => community().then((m) => ({ default: m.PostPage })));
@@ -131,6 +133,7 @@ export function App() {
         <Route path="newsletters" element={<RequirePerm perms={perm('/admin/newsletters')}><NewslettersAdminPage /></RequirePerm>} />
         <Route path="gallery" element={<RequirePerm perms={perm('/admin/gallery')}><GalleryAdminPage /></RequirePerm>} />
         <Route path="news" element={<RequirePerm perms={perm('/admin/news')}><NewsAdminPage /></RequirePerm>} />
+        <Route path="resources" element={<RequirePerm perms={perm('/admin/resources')}><Lazy><ResourcesAdminPage /></Lazy></RequirePerm>} />
         <Route path="custom-fields" element={<RequirePerm perms={perm('/admin/custom-fields')}><CustomFieldsAdminPage /></RequirePerm>} />
         <Route path="reports/:key?" element={<RequirePerm perms={perm('/admin/reports')}><ReportsPage /></RequirePerm>} />
         <Route path="privacy" element={<RequirePerm perms={perm('/admin/privacy')}><PrivacyAdminPage /></RequirePerm>} />
@@ -167,6 +170,7 @@ export function App() {
         <Route path="jobs/:id" element={<Lazy><JobPage /></Lazy>} />
         <Route path="jobs/:id/applications" element={<Lazy><JobApplicationsPage /></Lazy>} />
         <Route path="mentorship" element={<Lazy><MentorshipPage /></Lazy>} />
+        <Route path="resources" element={<Lazy><ResourcesPage /></Lazy>} />
         <Route path="mentorship/tab/:tab" element={<Lazy><MentorshipPage /></Lazy>} />
         <Route path="mentorship/requests/:id" element={<Lazy><MentorshipRequestPage /></Lazy>} />
         <Route path="achievements" element={<Lazy><AchievementsPage /></Lazy>} />

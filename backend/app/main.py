@@ -48,6 +48,7 @@ from .modules.mentorship import extras as mentorship_extras
 from .modules.mentorship import router as mentorship
 from .modules.messaging import router as messaging
 from .modules.public.router import router as public_router
+from .modules.resources import router as resources
 from .modules.setup.router import announce
 from .modules.setup.router import router as setup_router
 
@@ -161,6 +162,8 @@ def create_app() -> FastAPI:
         jobs_extras.router,
         jobs.router,
         jobs.admin,
+        resources.router,
+        resources.admin,
         mentorship_extras.router,
         mentorship.router,
         mentorship.admin,

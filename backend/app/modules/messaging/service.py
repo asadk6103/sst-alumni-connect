@@ -430,6 +430,7 @@ async def conversations_out(db: AsyncSession, me: Principal, convs: list[Convers
                 "muted": bool(s and s.muted),
                 "archived": bool(s and s.archived),
                 "pinned": bool(s and s.pinned),
+                "starred": bool(s and s.starred),
                 "created_at": c.created_at,
             }
         )

@@ -1,6 +1,7 @@
 """Messaging REST API (the real-time gateway offers the same send/read operations over Socket.IO)."""
 
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel, Field
@@ -33,7 +34,11 @@ chat = require("portal.message")
 
 @router.get("/conversations", summary="Your conversations (most recent first, with unread counts)")
 async def conversations(
-    q: str | None = Query(None, max_length=100), archived: bool = False, p: Principal = Depends(chat), db: AsyncSession = Depends(get_db)
+    q: str | None = Query(None, max_length=100),
+    archived: bool = False,
+    filter: Literal["all", "unread", "starred"] = "all",
+    p: Principal = Depends(chat),
+    db: AsyncSession = Depends(get_db),
 ):
     stmt = (
         select(Conversation)
@@ -57,6 +62,8 @@ async def conversations(
             .where(User.id != p.id, func.lower(User.full_name).like(like))
         )
         stmt = stmt.where(or_(func.lower(Conversation.title).like(like), Conversation.id.in_(others)))
+    if filter == "starred":
+        stmt = stmt.where(ConversationSetting.starred.is_(True))
     rows = (
         (
             await db.execute(
@@ -70,7 +77,10 @@ async def conversations(
         .scalars()
         .all()
     )
-    return {"data": await svc.conversations_out(db, p, list(rows))}
+    data = await svc.conversations_out(db, p, list(rows))
+    if filter == "unread":
+        data = [c for c in data if c.get("unread")]
+    return {"data": data}
 
 
 class DirectIn(BaseModel):
@@ -218,6 +228,7 @@ class SettingsIn(BaseModel):
     muted: bool | None = None
     archived: bool | None = None
     pinned: bool | None = None
+    starred: bool | None = None
 
 
 @router.put("/conversations/{conv_id}/settings", summary="Mute, archive or pin a conversation (for you)")
@@ -225,11 +236,11 @@ async def conv_settings(conv_id: uuid.UUID, body: SettingsIn, p: Principal = Dep
     await svc.member(db, conv_id, p.id)
     s = await db.get(ConversationSetting, (conv_id, p.id))
     if not s:
-        s = ConversationSetting(conversation_id=conv_id, user_id=p.id, muted=False, archived=False, pinned=False)
+        s = ConversationSetting(conversation_id=conv_id, user_id=p.id, muted=False, archived=False, pinned=False, starred=False)
         db.add(s)
     for f in body.model_fields_set:
         setattr(s, f, getattr(body, f))
-    return {"data": {"muted": s.muted, "archived": s.archived, "pinned": s.pinned}}
+    return {"data": {"muted": s.muted, "archived": s.archived, "pinned": s.pinned, "starred": s.starred}}
 
 
 @router.get("/conversations/{conv_id}/messages", summary="Messages, newest page first (cursor `before`), oldest-first within a page")

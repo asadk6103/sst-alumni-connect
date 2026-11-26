@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 4 of 6 done** (Stages 1–6 complete) · then: mobile app
+Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 5 of 6 done** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -65,8 +65,17 @@ years mentoring), Find a Mentee (approved mentors browse members who asked for a
 Mentorships, Sessions, Mentorship Requests (answer requests and offers), categories, upcoming sessions. Migrations
 `0012_events`, `0013_jobs`, `0014_mentorship`. Tests: 65 backend; `e2e-redesign-4a/4b/4c.mjs` pass (desktop + 390 px).
 
+**Phase 5 (done)** — Resource hub (new `resources` module, can be switched off under Modules): hero, search, category
+chips and tiles with counts, featured resources, rows with file-type tile, downloads, updated date, size, save and
+download (counted), curated collections, recently added, My Downloads / Saved / My Uploads; members upload files or
+links (reviewed by staff; new permission `portal.resources.upload` for verified alumni); admin "Resource Hub" page to
+approve / reject, feature and curate collections. Messages: list and chat as two cards in the shell, All / Unread /
+Starred tabs (new starred chats), richer chat header (online, class, headline), day separators, new bubbles and
+attachment cards, rounded composer with emoji picker. Voice / video calls stay hidden. Migrations `0015_resources`,
+`0016_starred`. Tests: 67 backend; `e2e-redesign-5.mjs` passes (desktop + 390 px).
+
 Next phases:
-5 Resources hub + Messages · 6 Settings (all sections), support tickets and FAQs.
+6 Settings (all sections), support tickets and FAQs.
 
 ## Completed (Stage 6 — Production readiness)
 

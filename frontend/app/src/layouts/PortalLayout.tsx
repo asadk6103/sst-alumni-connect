@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useQuery } from '@tanstack/react-query';
 import {
   BookMarked, Bookmark, Briefcase, CalendarDays, GraduationCap, Home, Mail, Menu as MenuIcon, MessageSquareText, Search, Settings,
-  UserRound, Users, UsersRound, X, BookOpen,
+  UserRound, Users, UsersRound, X, BookOpen, FolderOpen,
 } from 'lucide-react';
 import { api, get } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -41,6 +41,7 @@ const SIDE: Item[] = [
   { to: '/portal/directory', label: 'Alumni Directory', key: 'nav.directory', icon: BookOpen, perm: 'portal.directory', module: 'directory' },
   { to: '/portal/jobs', label: 'Jobs & Opportunities', key: 'nav.jobs_full', icon: Briefcase, perm: 'portal.jobs.view', module: 'jobs' },
   { to: '/portal/mentorship', label: 'Mentorship', key: 'nav.mentorship', icon: GraduationCap, module: 'mentorship' },
+  { to: '/portal/resources', label: 'Resources', key: 'nav.resources', icon: FolderOpen, module: 'resources' },
 ];
 const SIDE2: Item[] = [
   { to: '/portal/saved', label: 'Saved Posts', key: 'nav.saved', icon: Bookmark, perm: 'portal.react', module: 'community' },
@@ -56,6 +57,7 @@ function Promo({ onInvite }: { onInvite: () => void }) {
   const card = path.startsWith('/portal/community') ? { title: t('promo.communities', 'Join Communities'), text: 'Be part of batch, interest and professional groups. Share, discuss and collaborate with alumni.', label: '+ Create Community', icon: UsersRound, go: '/portal/community/groups?create=1' }
     : path.startsWith('/portal/events') ? { title: t('promo.events', 'Host an Alumni Event'), text: 'Plan reunions, networking sessions, webinars and more for the SST alumni community.', label: 'Browse Events', icon: CalendarDays, go: '/portal/events' }
       : path.startsWith('/portal/jobs') ? { title: t('promo.jobs', 'Hire from the SST Alumni Network'), text: 'Post job openings, find talented alumni and grow your team.', label: '+ Post a Job', icon: Briefcase, go: '/portal/jobs/post' }
+        : path.startsWith('/portal/resources') ? { title: t('promo.resources', 'Share Knowledge with Alumni'), text: 'Upload guides, templates and learning materials to help fellow alumni grow.', label: '+ Upload Resource', icon: FolderOpen, go: '/portal/resources?upload=1' }
         : path.startsWith('/portal/mentorship') ? { title: t('promo.mentor', 'Become a Mentor'), text: 'Share your experience, guide fellow alumni and give back to the SST community.', label: '+ Join as a Mentor', icon: GraduationCap, go: '/portal/mentorship/tab/become' }
           : path.startsWith('/portal/directory') ? { title: t('promo.directory', 'Explore the Alumni Network'), text: 'Find, connect and collaborate with SST alumni across the globe.', label: 'Find Alumni', icon: Search, go: '/portal/directory' }
             : path.startsWith('/portal/profile') ? { title: t('promo.profile', 'Complete Your Alumni Profile'), text: 'A complete profile helps you get better connections and opportunities.', label: 'Update Profile', icon: UserRound, go: '/portal/profile/edit/personal' }

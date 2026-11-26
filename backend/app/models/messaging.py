@@ -40,6 +40,7 @@ class ConversationSetting(Base):
     muted: Mapped[bool] = mapped_column(Boolean, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    starred: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class Message(UUIDPk, Base):

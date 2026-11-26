@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArrowLeft, BellOff, Check, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MessageSquarePlus, MoreHorizontal,
-  Paperclip, Pencil, Pin, Search, Send, Smile, Trash2, UserMinus, Users, X } from 'lucide-react';
+import { Archive, ArrowLeft, BellOff, Check, CheckCheck, CornerUpLeft, Download, FileText, Info, Inbox, Loader2, MessageSquarePlus, MoreHorizontal,
+  Paperclip, Pencil, Pin, Plus, Search, Send, Smile, SquarePen, Star, Trash2, UserMinus, Users, X } from 'lucide-react';
 import { api, get, qs } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useAction, useDebounced } from '@/lib/hooks';
 import { photoUrl, type PersonCard } from '@/lib/alumni';
 import { useLive, useRoom } from '@/lib/live';
-import { cn, fmtBytes, fmtDateTime, timeAgo } from '@/lib/utils';
+import { cn, fmtBytes, fmtDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, Badge, EmptyState, Skeleton } from '@/components/ui/display';
 import { Checkbox, Field, Input, Textarea } from '@/components/ui/form';
@@ -18,7 +18,7 @@ import type { Author } from '@/components/community';
 type Conv = {
   id: string; kind: 'direct' | 'group'; title: string; custom_title: string | null; members: (Author & { role: string; online: boolean })[];
   is_admin: boolean; blocked: boolean; last_message_at: string | null; last_message_preview: string | null; last_sender: Author | null;
-  unread: number; muted: boolean; archived: boolean; pinned: boolean;
+  unread: number; muted: boolean; archived: boolean; pinned: boolean; starred?: boolean;
 };
 type Att = { id: string; filename: string; mime: string; size: number; width: number | null; height: number | null; url: string };
 type Msg = {
@@ -29,6 +29,19 @@ type Msg = {
 };
 type Page = { data: Msg[]; meta: { before: string | null; people: Record<string, Author> } };
 const QUICK = ['👍', '❤️', '😂', '🎉', '🙏'];
+const EMOJI = ['😀', '😂', '😊', '😍', '🙏', '👍', '👏', '🎉', '❤️', '🔥', '😢', '😮', '🤝', '💯', '✅', '🙌'];
+const dayLabel = (iso: string) => {
+  const d = new Date(iso);
+  const today = new Date();
+  const y = new Date(); y.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+};
+const shortTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
 
 export function MessagesPage() {
   const { id } = useParams();
@@ -36,56 +49,58 @@ export function MessagesPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [archived, setArchived] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread' | 'starred'>('all');
   const [starting, setStarting] = useState<'direct' | 'group' | null>(null);
   const dq = useDebounced(q);
   const { connected } = useLive();
   // Live updates come over the WebSocket; without it, poll so chat keeps working.
-  const list = useQuery({ queryKey: ['conversations', dq, archived], refetchInterval: connected ? false : 10_000,
-    queryFn: () => get<Conv[]>(`/api/v1/messages/conversations${qs({ q: dq, archived: archived || undefined })}`) });
+  const list = useQuery({ queryKey: ['conversations', dq, archived, filter], refetchInterval: connected ? false : 10_000,
+    queryFn: () => get<Conv[]>(`/api/v1/messages/conversations${qs({ q: dq, archived: archived || undefined, filter: filter === 'all' ? undefined : filter })}`) });
+  const unreadTotal = useQuery({ queryKey: ['conversations', 'unread-count'], refetchInterval: connected ? false : 10_000,
+    queryFn: () => get<{ total: number }>('/api/v1/messages/unread') });
   const refresh = () => qc.invalidateQueries({ queryKey: ['conversations'] });
   useRoom(null, {
     'message:new': refresh, 'conversation:new': refresh, 'conversation:updated': refresh, 'conversation:read': refresh,
     presence: refresh,
   });
+  const tabs = [{ k: 'all', l: 'All' }, { k: 'unread', l: `Unread${unreadTotal.data?.total ? ` (${unreadTotal.data.total})` : ''}` }, { k: 'starred', l: 'Starred' }] as const;
   return (
-    <div className="-mx-4 -my-6 sm:-mx-6 lg:-my-8">
-      <div className="grid h-[calc(100vh-68px)] grid-cols-1 bg-surface md:grid-cols-[340px_1fr] md:border-x md:border-line">
-        <aside className={cn('flex min-h-0 flex-col border-r border-line', id && 'hidden md:flex')}>
-          <div className="space-y-3 border-b border-line p-4">
-            <div className="flex items-center justify-between">
-              <h1 className="font-heading text-lg font-semibold text-ink">Messages</h1>
+    <div className="grid h-[calc(100dvh-130px)] min-h-[480px] gap-5 md:grid-cols-[minmax(300px,380px)_1fr]">
+      <aside className={cn('flex min-h-0 flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card', id && 'hidden md:flex')}>
+        <div className="space-y-3 p-4 pb-0">
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="font-heading text-[22px] font-semibold text-ink">{archived ? 'Archived' : 'Messages'}</h1>
+            <div className="flex gap-1">
+              <Button size="icon" variant="ghost" aria-label="New message" onClick={() => setStarting('direct')}><SquarePen /></Button>
               <Menu>
-                <MenuTrigger asChild><Button size="icon" variant="ghost" aria-label="New conversation"><MessageSquarePlus /></Button></MenuTrigger>
+                <MenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Message options"><MoreHorizontal /></Button></MenuTrigger>
                 <MenuContent>
-                  <MenuItem onSelect={() => setStarting('direct')}><MessageSquarePlus />New message</MenuItem>
                   <MenuItem onSelect={() => setStarting('group')}><Users />New group chat</MenuItem>
+                  <MenuItem onSelect={() => setArchived(!archived)}>{archived ? <><Inbox />Back to inbox</> : <><Archive />Archived chats</>}</MenuItem>
                 </MenuContent>
               </Menu>
             </div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-              <Input aria-label="Search conversations" placeholder="Search people or groups…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 pl-9" />
-            </div>
-            <div className="flex gap-1 text-xs">
-              {[false, true].map((a) => (
-                <button key={String(a)} onClick={() => setArchived(a)} className={cn('rounded-full px-3 py-1', archived === a ? 'bg-primary-soft font-medium text-primary' : 'text-ink-muted hover:bg-canvas')}>
-                  {a ? 'Archived' : 'Inbox'}
-                </button>
-              ))}
-            </div>
           </div>
-          <ul className="min-h-0 flex-1 overflow-y-auto">
-            {list.isLoading ? Array.from({ length: 5 }).map((_, i) => <li key={i} className="p-4"><Skeleton className="h-10" /></li>)
-              : !list.data?.length ? <li><EmptyState icon={MessageSquarePlus} title={q ? 'No matches' : 'No conversations yet'} description="Message your connections and batchmates."
-                  action={<Button size="sm" onClick={() => setStarting('direct')}>New message</Button>} /></li>
-              : list.data.map((c) => <ConvRow key={c.id} c={c} active={c.id === id} />)}
-          </ul>
-        </aside>
-        <section className={cn('min-h-0 min-w-0', !id && 'hidden md:block')}>
-          {id ? <Thread key={id} id={id} onBack={() => nav('/portal/messages')} />
-            : <div className="grid h-full place-items-center"><EmptyState icon={MessageSquarePlus} title="Select a conversation" description="Or start a new one with a connection or batchmate." /></div>}
-        </section>
-      </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <Input aria-label="Search messages" placeholder="Search messages…" value={q} onChange={(e) => setQ(e.target.value)} className="h-10 rounded-full ps-9" />
+          </div>
+          <div className="flex gap-1 border-b border-line" role="tablist">{tabs.map((t) => (
+            <button key={t.k} role="tab" aria-selected={filter === t.k} onClick={() => setFilter(t.k)}
+              className={cn('-mb-px border-b-2 px-3 py-2 text-sm font-medium', filter === t.k ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink')}>{t.l}</button>))}</div>
+        </div>
+        <ul className="min-h-0 flex-1 overflow-y-auto py-1">
+          {list.isLoading ? Array.from({ length: 5 }).map((_, i) => <li key={i} className="p-4"><Skeleton className="h-10" /></li>)
+            : !list.data?.length ? <li><EmptyState icon={MessageSquarePlus} title={q ? 'No matches' : filter === 'unread' ? 'All caught up' : filter === 'starred' ? 'No starred chats' : 'No conversations yet'}
+                description={filter === 'starred' ? 'Star important chats from the chat menu.' : 'Message your connections and batchmates.'}
+                action={filter === 'all' && !q ? <Button size="sm" onClick={() => setStarting('direct')}>New message</Button> : undefined} /></li>
+            : list.data.map((c) => <ConvRow key={c.id} c={c} active={c.id === id} />)}
+        </ul>
+      </aside>
+      <section className={cn('min-h-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-card', !id && 'hidden md:block')}>
+        {id ? <Thread key={id} id={id} onBack={() => nav('/portal/messages')} />
+          : <div className="grid h-full place-items-center"><EmptyState icon={MessageSquarePlus} title="Select a conversation" description="Or start a new one with a connection or batchmate." /></div>}
+      </section>
       {starting && <NewConversation kind={starting} onClose={() => setStarting(null)} />}
     </div>
   );
@@ -98,7 +113,7 @@ function ConvAvatar({ c, size = 44 }: { c: Conv; size?: number }) {
   return (
     <span className="relative shrink-0">
       <Avatar name={c.title} src={photoUrl(other?.photo ?? null, size * 2)} size={size} />
-      {other?.online && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success" aria-label="Online" />}
+      {other?.online && <span className="absolute bottom-0 end-0 h-3.5 w-3.5 rounded-full border-2 border-surface bg-success" aria-label="Online" />}
     </span>
   );
 }
@@ -108,17 +123,18 @@ function ConvRow({ c, active }: { c: Conv; active: boolean }) {
   const mine = c.last_sender?.id === user?.id;
   return (
     <li>
-      <Link to={`/portal/messages/${c.id}`} className={cn('flex items-center gap-3 px-4 py-3 hover:bg-canvas', active && 'bg-primary-soft/60')}>
-        <ConvAvatar c={c} />
+      <Link to={`/portal/messages/${c.id}`} className={cn('mx-2 flex items-center gap-3 rounded-btn px-3 py-3 hover:bg-canvas', active && 'bg-primary-soft hover:bg-primary-soft')}>
+        <ConvAvatar c={c} size={48} />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5">
-            <span className={cn('truncate text-sm text-ink', c.unread ? 'font-semibold' : 'font-medium')}>{c.title}</span>
+            <span className="truncate text-[15px] font-semibold text-ink">{c.title}</span>
+            {c.starred && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" aria-label="Starred" />}
             {c.pinned && <Pin className="h-3 w-3 shrink-0 text-ink-muted" />}{c.muted && <BellOff className="h-3 w-3 shrink-0 text-ink-muted" />}
-            <span className="ml-auto shrink-0 text-[11px] text-ink-muted">{c.last_message_at ? timeAgo(c.last_message_at) : ''}</span>
+            <span className={cn('ms-auto shrink-0 text-xs', c.unread ? 'font-semibold text-primary' : 'text-ink-muted')}>{c.last_message_at ? shortTime(c.last_message_at) : ''}</span>
           </p>
-          <p className="flex items-center gap-2">
-            <span className={cn('truncate text-xs', c.unread ? 'font-medium text-ink' : 'text-ink-muted')}>{mine && 'You: '}{c.last_message_preview ?? 'No messages yet'}</span>
-            {c.unread > 0 && <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[11px] font-semibold leading-[18px] text-white">{c.unread}</span>}
+          <p className="mt-0.5 flex items-center gap-2">
+            <span className={cn('truncate text-sm', c.unread ? 'font-medium text-ink' : 'text-ink-muted')}>{mine && 'You: '}{c.last_message_preview ?? 'No messages yet'}</span>
+            {c.unread > 0 && <span className="ms-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white">{c.unread}</span>}
           </p>
         </div>
       </Link>
@@ -212,7 +228,7 @@ function Thread({ id, onBack }: { id: string; onBack: () => void }) {
   const del = useAction((m: Msg) => api(`/api/v1/messages/${m.id}`, { method: 'DELETE' }), { invalidate: [['messages', id], ['conversations']] });
   const react = useAction(({ m, emoji, on }: { m: Msg; emoji: string; on: boolean }) => api(`/api/v1/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`, { method: on ? 'PUT' : 'DELETE' }),
     { invalidate: [['messages', id]] });
-  const settings = useAction((body: Partial<Pick<Conv, 'muted' | 'archived' | 'pinned'>>) => api(`/api/v1/messages/conversations/${id}/settings`, { method: 'PUT', body }),
+  const settings = useAction((body: Partial<Pick<Conv, 'muted' | 'archived' | 'pinned' | 'starred'>>) => api(`/api/v1/messages/conversations/${id}/settings`, { method: 'PUT', body }),
     { invalidate: [['conversations'], ['conversation', id]] });
   const leave = useAction(() => api(`/api/v1/messages/conversations/${id}/members/${user!.id}`, { method: 'DELETE' }), { success: 'You left the conversation.', invalidate: [['conversations']], onSuccess: onBack });
   const block = useAction((uid: string) => api(`/api/v1/messages/blocks/${uid}`, { method: conv.data?.blocked ? 'DELETE' : 'PUT' }), { success: 'Done.', invalidate: [['conversation', id], ['conversations']] });
@@ -232,17 +248,20 @@ function Thread({ id, onBack }: { id: string; onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center gap-3 border-b border-line px-4 py-3">
-        <Button size="icon" variant="ghost" className="md:hidden" aria-label="Back" onClick={onBack}><ArrowLeft /></Button>
-        {c ? <ConvAvatar c={c} size={40} /> : <Skeleton className="h-10 w-10 rounded-full" />}
+        <Button size="icon" variant="ghost" className="md:hidden" aria-label="Back" onClick={onBack}><ArrowLeft className="rtl:rotate-180" /></Button>
+        {c ? <ConvAvatar c={c} size={48} /> : <Skeleton className="h-12 w-12 rounded-full" />}
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-ink">{c?.title}</p>
-          <p className="truncate text-xs text-ink-muted">{typers.length ? `${typers.join(', ')} typing…` : c?.kind === 'group' ? `${c.members.length} members` : other?.online ? 'Online' : other ? 'Offline' : ''}</p>
+          <p className="flex items-center gap-2 truncate font-heading text-[17px] font-semibold text-ink">{c?.title}{c?.kind === 'direct' && other?.online && <span className="h-2.5 w-2.5 rounded-full bg-success" aria-hidden />}</p>
+          <p className="truncate text-xs text-ink-muted">{typers.length ? <span className="text-primary">{typers.join(', ')} typing…</span> : c?.kind === 'group' ? `${c.members.length} members`
+            : <>{other?.online ? <span className="font-medium text-success">● Online</span> : other ? 'Offline' : ''}{other && [other.batch, other.headline].filter(Boolean).length > 0 && ` · ${[other.batch, other.headline].filter(Boolean).join(' • ')}`}</>}</p>
         </div>
+        {c && c.kind === 'direct' && other && <Button asChild size="icon" variant="ghost" aria-label="Profile"><Link to={`/portal/alumni/${other.id}`}><Info /></Link></Button>}
         {c && (
           <Menu>
             <MenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Conversation options"><MoreHorizontal /></Button></MenuTrigger>
             <MenuContent>
               {c.kind === 'direct' && other && <MenuItem onSelect={() => window.location.assign(`/portal/alumni/${other.id}`)}><Users />View profile</MenuItem>}
+              <MenuItem onSelect={() => settings.mutate({ starred: !c.starred })}><Star />{c.starred ? 'Unstar' : 'Star'}</MenuItem>
               <MenuItem onSelect={() => settings.mutate({ pinned: !c.pinned })}><Pin />{c.pinned ? 'Unpin' : 'Pin'}</MenuItem>
               <MenuItem onSelect={() => settings.mutate({ muted: !c.muted })}><BellOff />{c.muted ? 'Unmute' : 'Mute'}</MenuItem>
               <MenuItem onSelect={() => settings.mutate({ archived: !c.archived })}><Archive />{c.archived ? 'Move to inbox' : 'Archive'}</MenuItem>
@@ -253,23 +272,26 @@ function Thread({ id, onBack }: { id: string; onBack: () => void }) {
           </Menu>
         )}
       </header>
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-canvas/60 px-4 py-4" aria-live="polite">
+      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-4" aria-live="polite">
         {pages.isFetchingNextPage && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-ink-muted" /></div>}
         {pages.isLoading ? <Skeleton className="h-40" /> : messages.length === 0 ? <p className="py-10 text-center text-sm text-ink-muted">Say hello 👋</p>
           : messages.map((m, i) => {
             const prev = messages[i - 1];
             const mine = m.sender_id === user?.id;
-            const grouped = prev && prev.sender_id === m.sender_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000 && prev.kind !== 'system';
-            if (m.kind === 'system') return <p key={m.id} className="py-2 text-center text-xs text-ink-muted">{m.body}</p>;
+            const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+            const grouped = !newDay && prev && prev.sender_id === m.sender_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000 && prev.kind !== 'system';
+            const sep = newDay && <div className="flex justify-center py-2"><span className="rounded-full bg-canvas px-3 py-1 text-xs font-medium text-ink-muted">{dayLabel(m.created_at)}</span></div>;
+            if (m.kind === 'system') return <div key={m.id}>{sep}<p className="py-2 text-center text-xs text-ink-muted">{m.body}</p></div>;
             const author = m.sender_id ? people[m.sender_id] : null;
             return (
-              <div key={m.id} className={cn('group flex gap-2', mine ? 'justify-end' : 'justify-start', !grouped && 'pt-2')}>
-                {!mine && <span className="w-8 shrink-0">{!grouped && <Avatar name={author?.full_name} src={photoUrl(author?.photo ?? null, 64)} size={32} />}</span>}
+              <div key={m.id}>{sep}
+              <div className={cn('group flex gap-2', mine ? 'justify-end' : 'justify-start', !grouped && 'pt-2')}>
+                {!mine && <span className="w-9 shrink-0 self-end">{!grouped && <Avatar name={author?.full_name} src={photoUrl(author?.photo ?? null, 72)} size={36} />}</span>}
                 <div className={cn('flex max-w-[78%] flex-col', mine ? 'items-end' : 'items-start')}>
                   {!mine && !grouped && c?.kind === 'group' && <span className="mb-0.5 text-xs font-medium text-ink-muted">{author?.full_name}</span>}
                   <div className="flex items-center gap-1">
                     {mine && !m.deleted && !m.pending && <MsgActions m={m} mine onReply={() => setReplyTo(m)} onEdit={() => setEditing(m)} onDelete={async () => { if (await confirm({ title: 'Delete for everyone?', confirmLabel: 'Delete', danger: true })) del.mutate(m); }} onReact={(e, on) => react.mutate({ m, emoji: e, on })} />}
-                    <div className={cn('rounded-2xl px-3.5 py-2 text-[14.5px]', mine ? 'rounded-br-md bg-primary text-white' : 'rounded-bl-md border border-line bg-surface text-ink', m.failed && 'bg-danger/80')}>
+                    <div className={cn('rounded-2xl px-4 py-2.5 text-[15px]', mine ? 'rounded-ee-md bg-primary text-white' : 'rounded-es-md bg-canvas text-ink', m.failed && 'bg-danger/80')}>
                       {m.reply_to && <p className={cn('mb-1 border-l-2 pl-2 text-xs', mine ? 'border-white/60 text-white/80' : 'border-primary/50 text-ink-muted')}>
                         {m.reply_to.deleted ? 'Deleted message' : `${people[m.reply_to.sender_id ?? '']?.full_name ?? ''}: ${m.reply_to.body}`}</p>}
                       {m.deleted ? <span className="italic opacity-80">Message deleted</span> : <span className="whitespace-pre-wrap break-words">{m.body}</span>}
@@ -290,6 +312,7 @@ function Thread({ id, onBack }: { id: string; onBack: () => void }) {
                       : m.status === 'delivered' ? <CheckCheck className="h-3.5 w-3.5" aria-label="Delivered" /> : <Check className="h-3.5 w-3.5" aria-label="Sent" />)}
                   </span>
                 </div>
+              </div>
               </div>
             );
           })}
@@ -334,8 +357,9 @@ function Attachment({ a, mine }: { a: Att; mine: boolean }) {
   };
   if (isImage) return src ? <button onClick={open} className="mt-1 block" aria-label={`Download ${a.filename}`}><img src={src} alt={a.filename} className="max-h-64 rounded-lg" /></button> : <Skeleton className="mt-1 h-32 w-48" />;
   return (
-    <button onClick={open} className={cn('mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm', mine ? 'bg-white/15' : 'bg-canvas')}>
-      <FileText className="h-5 w-5 shrink-0" /><span className="min-w-0"><span className="block truncate">{a.filename}</span><span className="text-xs opacity-75">{fmtBytes(a.size)}</span></span><Download className="h-4 w-4" />
+    <button onClick={open} className={cn('mt-1.5 flex min-w-[220px] items-center gap-3 rounded-xl p-2.5 text-start text-sm', mine ? 'bg-white/15' : 'bg-surface')}>
+      <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-lg', mine ? 'bg-white/20' : 'bg-[#fde8e8] text-[#d32f2f]')}><FileText className="h-5 w-5" /></span>
+      <span className="min-w-0 flex-1"><span className="block truncate font-medium">{a.filename}</span><span className="text-xs opacity-75">{fmtBytes(a.size)}</span></span><Download className="h-4 w-4 shrink-0" />
     </button>
   );
 }
@@ -350,6 +374,7 @@ function MessageBox({ conversationId, replyTo, onCancelReply, editing, onDoneEdi
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<Att[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [emoji, setEmoji] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingSent = useRef(0);
   useEffect(() => { if (editing) setBody(editing.body); }, [editing]);
@@ -397,12 +422,21 @@ function MessageBox({ conversationId, replyTo, onCancelReply, editing, onDoneEdi
         ))}</div>
       )}
       <div className="flex items-end gap-2">
-        {!editing && <Button size="icon" variant="ghost" aria-label="Attach a file" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Paperclip />}</Button>}
+        {!editing && <Button size="icon" variant="outline" className="h-11 w-11 shrink-0 rounded-full" aria-label="Add a file" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Plus />}</Button>}
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
-        <Textarea aria-label="Message" placeholder="Write a message…" rows={1} value={body} className="max-h-40 min-h-[42px] resize-none py-2.5"
-          onChange={(e) => { setBody(e.target.value); ping(!!e.target.value); }} onBlur={() => ping(false)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } else if (e.key === 'Escape' && editing) { onDoneEditing(); setBody(''); } }} />
-        <Button size="icon" aria-label="Send" disabled={uploading || (!body.trim() && !files.length)} onClick={submit}><Send /></Button>
+        <div className="relative min-w-0 flex-1">
+          <Textarea aria-label="Message" placeholder="Type a message…" rows={1} value={body} className="max-h-40 min-h-[44px] resize-none rounded-[22px] py-2.5 pe-20 ps-4"
+            onChange={(e) => { setBody(e.target.value); ping(!!e.target.value); }} onBlur={() => ping(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } else if (e.key === 'Escape' && editing) { onDoneEditing(); setBody(''); } }} />
+          <div className="absolute bottom-1.5 end-2 flex">
+            <Menu open={emoji} onOpenChange={setEmoji}>
+              <MenuTrigger asChild><button type="button" className="rounded-full p-1.5 text-ink-muted hover:text-ink" aria-label="Emoji"><Smile className="h-5 w-5" /></button></MenuTrigger>
+              <MenuContent align="end" className="min-w-0"><div className="grid grid-cols-8 gap-0.5 p-1">{EMOJI.map((x) => <button key={x} type="button" className="rounded p-1 text-lg hover:bg-canvas" onClick={() => { setBody((b) => b + x); setEmoji(false); }}>{x}</button>)}</div></MenuContent>
+            </Menu>
+            {!editing && <button type="button" className="rounded-full p-1.5 text-ink-muted hover:text-ink" aria-label="Attach a file" disabled={uploading} onClick={() => fileRef.current?.click()}><Paperclip className="h-5 w-5" /></button>}
+          </div>
+        </div>
+        <Button size="icon" className="h-11 w-11 shrink-0 rounded-full" aria-label="Send" disabled={uploading || (!body.trim() && !files.length)} onClick={submit}><Send /></Button>
       </div>
     </div>
   );

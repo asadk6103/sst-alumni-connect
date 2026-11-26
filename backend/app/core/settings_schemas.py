@@ -245,6 +245,7 @@ DEFAULT_MODULES: dict[str, tuple[str, str]] = {
     "messaging": ("Messaging", "Private and group chat."),
     "chapters": ("Alumni Chapters", "Regional alumni chapters."),
     "achievements": ("Alumni Achievements", "Distinguished alumni, success stories and nominations."),
+    "resources": ("Resource Hub", "Shared learning materials, career guides, documents and videos."),
 }
 
 
