@@ -320,11 +320,15 @@ async def relations(db: AsyncSession, me: uuid.UUID, ids: list[uuid.UUID]) -> di
             )
         ).all():
             faces[u.id] = {"id": str(u.id), "full_name": u.full_name, "photo": await photo_out(db, pr.photo_id)}
+    from ...services import member_settings
+
+    prefs = await member_settings.get_many(db, ids)
     for i in ids:
-        out[i]["mutual"] = len(mutual.get(i, []))
-        out[i]["mutual_ids"] = [str(x) for x in mutual.get(i, [])[:3]]
-        out[i]["mutual_people"] = [faces[x] for x in mutual.get(i, [])[:3] if x in faces]
-        out[i]["online"] = online.get(i, False)
+        show_mutual = prefs.get(i, member_settings.DEFAULTS)["show_mutual"]
+        out[i]["mutual"] = len(mutual.get(i, [])) if show_mutual else 0
+        out[i]["mutual_ids"] = [str(x) for x in mutual.get(i, [])[:3]] if show_mutual else []
+        out[i]["mutual_people"] = [faces[x] for x in mutual.get(i, [])[:3] if x in faces] if show_mutual else []
+        out[i]["online"] = online.get(i, False) and prefs.get(i, member_settings.DEFAULTS)["show_online"]
     return out
 
 
@@ -616,8 +620,11 @@ async def ensure_profile(db: AsyncSession, user: User) -> AlumniProfile:
 
 
 async def directory_visible_clause(db: AsyncSession):
+    from ...services import member_settings
+
     cfg = await settings(db)
-    clauses = [User.deleted_at.is_(None), User.status == "active"]
+    # members who hide themselves from the directory also drop out of search and suggestions
+    clauses = [User.deleted_at.is_(None), User.status == "active", User.id.not_in(member_settings.opted_out("show_in_directory"))]
     if not cfg.directory_include_unverified:
         clauses.append(AlumniProfile.verification_status == "verified")
     return clauses

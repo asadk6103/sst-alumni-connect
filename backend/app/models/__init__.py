@@ -85,6 +85,7 @@ from .institutional import (
     Scholarship,
     ScholarshipAward,
 )
+from .member import Faq, MemberSettings, SupportReply, SupportTicket, TrustedDevice
 from .messaging import (
     BlockedUser,
     Conversation,
@@ -98,6 +99,11 @@ from .messaging import (
 from .resources import Resource, ResourceCollection, ResourceCollectionItem, ResourceDownload, ResourceSave
 
 __all__ = [
+    "Faq",
+    "MemberSettings",
+    "SupportReply",
+    "SupportTicket",
+    "TrustedDevice",
     "Resource",
     "ResourceCollection",
     "ResourceCollectionItem",

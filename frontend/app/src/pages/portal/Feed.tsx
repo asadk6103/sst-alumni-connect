@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Bookmark, CalendarDays, FileText, MapPin, UserPlus, Users, UsersRound } from 'lucide-react';
 import { api, get } from '@/lib/api';
+import { usePref } from '@/lib/prefs';
 import { useAuth } from '@/lib/auth';
 import { useAction } from '@/lib/hooks';
 import { useT } from '@/lib/i18n';
@@ -30,7 +31,9 @@ export function FeedPage() {
   const site = useSite();
   const t = useT();
   const [tab, setTab] = useState('all');
-  const [sort, setSort] = useState<'latest' | 'relevant'>('latest');
+  const order = usePref('feed_order');
+  const [sort, setSort] = useState<'latest' | 'relevant'>(order ?? 'relevant');
+  useEffect(() => { if (order) setSort(order); }, [order]);
   const dash = useQuery({ queryKey: ['alumni-dashboard'], queryFn: () => get<Dash>('/api/v1/alumni/dashboard') });
   const mine = useGroups('mine');
   const first = (user?.full_name ?? '').split(' ')[0];
@@ -56,6 +59,7 @@ export function FeedPage() {
 }
 
 function FeedAside({ dash, groups }: { dash?: Dash; groups: GroupT[] }) {
+  const showSuggestions = usePref('show_suggestions');
   const site = useSite();
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -111,7 +115,7 @@ function FeedAside({ dash, groups }: { dash?: Dash; groups: GroupT[] }) {
           </ul>
         )}
       </SectionCard>
-      {(dash?.suggestions?.length ?? 0) > 0 && (
+      {showSuggestions && (dash?.suggestions?.length ?? 0) > 0 && (
         <SectionCard title="People you may know" icon={UserPlus} action={<Link to="/portal/directory" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">View All<ArrowRight className="h-4 w-4 rtl:rotate-180" /></Link>}>
           <ul className="space-y-3">
             {dash!.suggestions!.slice(0, 4).map((p) => (

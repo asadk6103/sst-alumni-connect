@@ -6,6 +6,7 @@ import {
   MapPin, Megaphone, MessageCircle, MoreHorizontal, Pencil, Pin, Plus, Repeat2, Send, Smile, ThumbsUp, Trash2, Trophy, UserPlus, Users, Video, X,
 } from 'lucide-react';
 import { api, get } from '@/lib/api';
+import { usePref } from '@/lib/prefs';
 import { useAuth } from '@/lib/auth';
 import { useAction, useDebounced } from '@/lib/hooks';
 import { photoUrl, type Photo } from '@/lib/alumni';
@@ -52,10 +53,11 @@ export function RichText({ text, className, mentions = [] }: { text: string; cla
   const names = mentions.map((m) => m.full_name).sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const re = new RegExp(`(https?://[^\\s<]+${names.length ? `|@(?:${names.join('|')})` : ''}|#[\\w\\u0600-\\u06FF]+)`, 'g');
   const parts = text.split(re);
+  const newTab = usePref('open_links_new_tab');
   return (
     <p className={cn('whitespace-pre-line break-words text-[15px] leading-relaxed text-ink', className)}>
       {parts.map((p, i) => {
-        if (/^https?:\/\//.test(p)) return <a key={i} href={p} target="_blank" rel="noopener noreferrer nofollow ugc" className="text-primary underline-offset-2 hover:underline">{p}</a>;
+        if (/^https?:\/\//.test(p)) return <a key={i} href={p} target={newTab ? '_blank' : undefined} rel="noopener noreferrer nofollow ugc" className="text-primary underline-offset-2 hover:underline">{p}</a>;
         if (p.startsWith('@')) { const m = mentions.find((x) => `@${x.full_name}` === p); if (m) return <Link key={i} to={`/portal/alumni/${m.id}`} className="font-medium text-primary hover:underline">{p}</Link>; }
         if (/^#[\w؀-ۿ]+$/.test(p)) return <span key={i} className="font-medium text-primary">{p}</span>;
         return <Fragment key={i}>{p}</Fragment>;
@@ -108,12 +110,13 @@ function DocList({ media }: { media: MediaT[] }) {
 
 function Gallery({ media }: { media: MediaT[] }) {
   const [open, setOpen] = useState<number | null>(null);
+  const autoplay = usePref('autoplay');
   if (!media.length) return null;
   const pick = (m: MediaT, w: number) => m.variants.find((v) => v.width >= w)?.url ?? m.url;
   const isVideo = (m: MediaT) => m.mime?.startsWith('video/') || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(m.url);
   const n = media.length;
   const cell = (m: MediaT, i: number, cls: string, w: number) => isVideo(m)
-    ? <video key={m.id} src={m.url} controls preload="metadata" className={cn('w-full rounded-[10px] bg-black object-cover', cls)} />
+    ? <video key={m.id} src={m.url} controls preload="metadata" autoPlay={autoplay} muted={autoplay} loop={autoplay} playsInline className={cn('w-full rounded-[10px] bg-black object-cover', cls)} />
     : (
       <button key={m.id} onClick={() => setOpen(i)} className={cn('relative block overflow-hidden rounded-[10px] bg-canvas', cls)} aria-label="Open photo">
         <img src={pick(m, w)} alt={m.alt} loading="lazy" className="h-full w-full object-cover" />

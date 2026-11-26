@@ -14,7 +14,7 @@ from ...core.deps import Principal, require, require_module
 from ...core.errors import AppError, conflict, forbidden, not_found
 from ...core.redis import enforce
 from ...models import DiscussionGroup, Event, GroupInvite, GroupMember, Media, Post, PostMedia, User
-from ...services import notifications, rooms
+from ...services import member_settings, notifications, rooms
 from ..alumni.service import connected_ids
 from . import service as svc
 
@@ -291,9 +291,12 @@ async def invite(group_id: uuid.UUID, body: InviteIn, p: Principal = Depends(rea
     await enforce(f"group-invite:{p.id}", 200, 86400, "You have sent many invitations today.")
     manager = await svc.can_manage_group(db, p, g)
     friends = await connected_ids(db, p.id, list(body.user_ids))
+    prefs = await member_settings.get_many(db, body.user_ids)
     sent = 0
     for uid in dict.fromkeys(body.user_ids):
         if uid == p.id or (uid not in friends and not manager):
+            continue
+        if prefs.get(uid, member_settings.DEFAULTS)["group_invites"] == "none":
             continue
         m = await db.get(GroupMember, (g.id, uid))
         if m and m.status in ("active", "banned"):

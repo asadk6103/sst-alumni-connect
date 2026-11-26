@@ -88,6 +88,7 @@ class LoginAttempt(Base):
     ip: Mapped[str | None] = mapped_column(INET)
     success: Mapped[bool] = mapped_column(Boolean)
     reason: Mapped[str | None] = mapped_column(String(40))
+    user_agent: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

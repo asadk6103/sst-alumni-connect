@@ -116,6 +116,7 @@ async def export_data(me: Principal = Depends(require("portal.access")), db: Asy
     await enforce(f"data-export:{me.id}", 3, 86400, "You can download your data three times a day.")
     data = await personal_data(db, me.id)
     await record(db, actor_id=me.id, action="export", entity="personal_data", entity_id=me.id, summary="Downloaded their personal data")
+    db.add(PrivacyRequest(user_id=me.id, kind="export", status="completed", handled_at=datetime.now(UTC)))
     await db.commit()
     body = orjson.dumps(data, option=orjson.OPT_INDENT_2 | orjson.OPT_NON_STR_KEYS, default=str)
     return Response(
@@ -142,14 +143,41 @@ def request_out(r: PrivacyRequest, user: User | None = None) -> dict:
 
 async def _open_request(db: AsyncSession, uid) -> PrivacyRequest | None:
     return (
-        await db.execute(select(PrivacyRequest).where(PrivacyRequest.user_id == uid, PrivacyRequest.status == "pending"))
+        await db.execute(
+            select(PrivacyRequest).where(
+                PrivacyRequest.user_id == uid, PrivacyRequest.status == "pending", PrivacyRequest.kind == "deletion"
+            )
+        )
     ).scalar_one_or_none()
+
+
+@router.get("/requests", summary="Your data requests (exports and deletion requests)")
+async def my_requests(me: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
+    rows = (
+        (
+            await db.execute(
+                select(PrivacyRequest).where(PrivacyRequest.user_id == me.id).order_by(PrivacyRequest.created_at.desc()).limit(50)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "data": [
+            {"id": str(r.id), "kind": r.kind, "status": r.status, "created_at": r.created_at, "handled_at": r.handled_at} for r in rows
+        ]
+    }
 
 
 @router.get("/deletion-request", summary="Your account deletion request, if any")
 async def my_request(me: Principal = Depends(require("portal.access")), db: AsyncSession = Depends(get_db)):
     r = (
-        await db.execute(select(PrivacyRequest).where(PrivacyRequest.user_id == me.id).order_by(PrivacyRequest.created_at.desc()).limit(1))
+        await db.execute(
+            select(PrivacyRequest)
+            .where(PrivacyRequest.user_id == me.id, PrivacyRequest.kind == "deletion")
+            .order_by(PrivacyRequest.created_at.desc())
+            .limit(1)
+        )
     ).scalar_one_or_none()
     return {"data": request_out(r) if r else None}
 
@@ -197,7 +225,7 @@ async def list_requests(
     _: Principal = Depends(require("users.view")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(PrivacyRequest).order_by(PrivacyRequest.created_at.desc())
+    stmt = select(PrivacyRequest).where(PrivacyRequest.kind == "deletion").order_by(PrivacyRequest.created_at.desc())
     if status:
         stmt = stmt.where(PrivacyRequest.status == status)
     rows, meta = await paginate(db, stmt, p)

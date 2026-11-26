@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core import settings_store
 from ...core.db import get_db
 from ...core.deps import Principal, require, require_module
-from ...core.errors import AppError, conflict, not_found
+from ...core.errors import AppError, conflict, forbidden, not_found
 from ...core.pagination import PageParams, page_params
 from ...core.redis import enforce
 from ...core.security import token_hash
@@ -577,6 +577,10 @@ async def follow(user_id: uuid.UUID, me: Principal = Depends(require("portal.con
     if user_id == me.id:
         raise conflict("SELF", "You cannot follow yourself.")
     await _target(db, me, user_id)
+    from ...services import member_settings
+
+    if not (await member_settings.get(db, user_id))["allow_follow"] and not await db.get(AlumniFollow, (me.id, user_id)):
+        raise forbidden("This member does not accept followers. Send a connection request instead.")
     if not await db.get(AlumniFollow, (me.id, user_id)):
         db.add(AlumniFollow(follower_id=me.id, followee_id=user_id))
     return {"data": {"following": True}}
@@ -628,12 +632,51 @@ def _notify(db: AsyncSession, user_id: uuid.UUID, event: str, data: dict) -> Non
     live.emit_to_user(db, user_id, event, data)
 
 
+async def _accepts_requests(db: AsyncSession, me: Principal, target_id: uuid.UUID) -> None:
+    """The target's "who can send me connection requests" setting (their own pending request always counts)."""
+    from ...services import member_settings
+
+    policy = (await member_settings.get(db, target_id))["connection_requests"]
+    if policy == "anyone" or me.can("alumni.view"):
+        return
+    theirs = (
+        await db.execute(
+            select(AlumniConnection.id).where(
+                AlumniConnection.requester_id == target_id, AlumniConnection.addressee_id == me.id, AlumniConnection.status == "pending"
+            )
+        )
+    ).first()
+    if theirs:
+        return
+    if policy == "none":
+        raise forbidden("This member is not accepting connection requests.")
+    mine, theirs_p = await db.get(AlumniProfile, me.id), await db.get(AlumniProfile, target_id)
+    same = bool(
+        mine
+        and theirs_p
+        and (
+            (mine.batch_id and mine.batch_id == theirs_p.batch_id)
+            or (mine.graduation_year and mine.graduation_year == theirs_p.graduation_year)
+        )
+    )
+    near = bool(
+        mine
+        and theirs_p
+        and mine.graduation_year
+        and theirs_p.graduation_year
+        and abs(mine.graduation_year - theirs_p.graduation_year) <= 5
+    )
+    if (policy == "batch" and not same) or (policy == "batch_range" and not (same or near)):
+        raise forbidden("This member only accepts connection requests from their batch.")
+
+
 @router.post("/connections", status_code=201, summary="Send a connection request", dependencies=[Depends(directory)])
 async def connect(body: ConnectIn, me: Principal = Depends(require("portal.connect")), db: AsyncSession = Depends(get_db)):
     if body.user_id == me.id:
         raise conflict("SELF", "You cannot connect with yourself.")
     await enforce(f"connect:{me.id}", 50, 86400, "You have sent many requests today. Please try again tomorrow.")
     target, _, _ = await _target(db, me, body.user_id)
+    await _accepts_requests(db, me, target.id)
     lo, hi = sorted([me.id, target.id])  # PostgreSQL orders uuids bytewise, like Python
     pair = and_(
         func.least(AlumniConnection.requester_id, AlumniConnection.addressee_id) == lo,

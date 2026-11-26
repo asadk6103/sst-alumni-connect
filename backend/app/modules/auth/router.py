@@ -43,6 +43,48 @@ class LoginIn(BaseModel):
 class MfaLoginIn(BaseModel):
     challenge: str = Field(..., min_length=10, max_length=200)
     code: str = Field(..., min_length=6, max_length=20)
+    remember_device: bool = False  # skip the code on this browser for TRUSTED_DAYS
+
+
+TRUSTED_COOKIE = "sst_td"
+TRUSTED_DAYS = 30
+
+
+async def _trusted(db: AsyncSession, request: Request, user: User) -> bool:
+    from ...models import TrustedDevice
+
+    raw = request.cookies.get(TRUSTED_COOKIE)
+    if not raw:
+        return False
+    d = (await db.execute(select(TrustedDevice).where(TrustedDevice.token_hash == token_hash(raw)))).scalar_one_or_none()
+    if not d or d.user_id != user.id or d.expires_at <= svc.now():
+        return False
+    d.last_used_at = svc.now()
+    return True
+
+
+async def _trust_device(db: AsyncSession, request: Request, response: Response, user: User) -> None:
+    from ...models import TrustedDevice
+
+    raw = random_token(32)
+    db.add(
+        TrustedDevice(
+            user_id=user.id,
+            token_hash=token_hash(raw),
+            user_agent=(request.headers.get("user-agent") or "")[:300] or None,
+            ip=client_ip(request),
+            expires_at=svc.now() + timedelta(days=TRUSTED_DAYS),
+        )
+    )
+    response.set_cookie(
+        TRUSTED_COOKIE,
+        raw,
+        max_age=TRUSTED_DAYS * 86400,
+        httponly=True,
+        samesite="strict",
+        secure=request.url.scheme == "https",
+        path=svc.COOKIE_PATH,
+    )
 
 
 class EmailIn(BaseModel):
@@ -130,8 +172,10 @@ async def _find_user(db: AsyncSession, email: str) -> User | None:
 
 
 async def _login_alert(db: AsyncSession, request: Request, user: User) -> None:
+    from ...services import member_settings
+
     sec = await _sec(db)
-    if not sec.login_notifications:
+    if not sec.login_notifications or not (await member_settings.get(db, user.id))["login_alerts"]:
         return
     ua = (request.headers.get("user-agent") or "")[:300]
     known = (
@@ -167,6 +211,13 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
         await db.commit()  # keep the attempt and any lockout despite the error response
         raise AppError(401, "INVALID_CREDENTIALS", "The email or password is incorrect.")
     if user.status == "deactivated":
+        from ...services import member_settings
+
+        prefs = await member_settings.get(db, user.id)
+        if prefs.get("self_deactivated"):  # members who paused their own account come back by signing in
+            user.status = "active"
+            await member_settings.save(db, user.id, {"self_deactivated": False})
+    if user.status == "deactivated":
         await svc.record_attempt(db, request, body.email, False, "deactivated", user)
         await db.commit()
         raise AppError(403, "ACCOUNT_DEACTIVATED", "This account has been deactivated. Please contact the alumni office.")
@@ -177,7 +228,8 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email address first. Check your inbox for the link.")
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(body.password)
-    if user.totp_enabled:
+    trusted = not svc.is_mobile(request) and user.totp_enabled and await _trusted(db, request, user)
+    if user.totp_enabled and not trusted:
         challenge = random_token(32)
         await svc.create_verification(
             db, user, "mfa_challenge", token_hash(challenge), timedelta(minutes=5), data={"remember": body.remember}
@@ -221,6 +273,8 @@ async def login_mfa(body: MfaLoginIn, request: Request, response: Response, db: 
     v.consumed_at = svc.now()
     if user.status == "pending":
         user.status = "active"
+    if body.remember_device and not svc.is_mobile(request):
+        await _trust_device(db, request, response, user)
     await svc.record_attempt(db, request, user.email, True, "mfa", user)
     await _login_alert(db, request, user)
     tokens = await svc.issue_session(db, request, response, user, remember=(v.data or {}).get("remember", True))

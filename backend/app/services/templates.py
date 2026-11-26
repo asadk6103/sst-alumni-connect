@@ -68,6 +68,26 @@ DEFAULT_TEMPLATES: list[tuple[str, str, str, str | None, str, list[str]]] = [
         ["name", "device", "ip", "time", "app_name"],
     ),
     (
+        "notification.sms",
+        "sms",
+        "Notification (SMS)",
+        None,
+        "{{app_name}}: {{title}}",
+        ["title", "app_name"],
+    ),
+    (
+        "digest.weekly",
+        "email",
+        "Weekly digest",
+        "Your week on {{app_name}}",
+        "<p>Hello {{name}},</p><p>Here is what happened on {{app_name}} this week:</p>"
+        "<ul><li>{{posts}} new posts in your feed</li><li>{{events}} upcoming events</li><li>{{jobs}} new job opportunities</li>"
+        "<li>{{unread}} unread notifications</li></ul>"
+        '<p><a class="btn" href="{{link}}">Open the portal</a></p>'
+        "<p>You receive this digest because you turned it on in Settings › Preferences.</p>",
+        ["name", "posts", "events", "jobs", "unread", "link", "app_name"],
+    ),
+    (
         "auth.phone_otp",
         "sms",
         "Mobile verification code",

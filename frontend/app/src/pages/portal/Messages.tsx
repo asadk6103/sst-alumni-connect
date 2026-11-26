@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Archive, ArrowLeft, BellOff, Check, CheckCheck, CornerUpLeft, Download, FileText, Info, Inbox, Loader2, MessageSquarePlus, MoreHorizontal,
   Paperclip, Pencil, Pin, Plus, Search, Send, Smile, SquarePen, Star, Trash2, UserMinus, Users, X } from 'lucide-react';
 import { api, get, qs } from '@/lib/api';
+import { usePref } from '@/lib/prefs';
 import { useAuth } from '@/lib/auth';
 import { useAction, useDebounced } from '@/lib/hooks';
 import { photoUrl, type PersonCard } from '@/lib/alumni';
@@ -371,6 +372,7 @@ function MessageBox({ conversationId, replyTo, onCancelReply, editing, onDoneEdi
   const { socket } = useLive();
   const toast = useToast();
   const qc = useQueryClient();
+  const typingOn = usePref('typing');
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<Att[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -379,7 +381,7 @@ function MessageBox({ conversationId, replyTo, onCancelReply, editing, onDoneEdi
   const typingSent = useRef(0);
   useEffect(() => { if (editing) setBody(editing.body); }, [editing]);
   const ping = (on: boolean) => {
-    if (!socket?.connected) return;
+    if (!socket?.connected || (on && !typingOn)) return;
     if (on && Date.now() - typingSent.current < 3000) return;
     typingSent.current = on ? Date.now() : 0;
     socket.emit('typing', { conversation_id: conversationId, typing: on });

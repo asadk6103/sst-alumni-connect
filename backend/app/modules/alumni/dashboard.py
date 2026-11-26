@@ -11,6 +11,7 @@ from ...core.db import get_db
 from ...core.deps import Principal, require
 from ...core.settings_schemas import DASHBOARD_WIDGETS, DashboardSettings
 from ...models import Achievement, AlumniConnection, AlumniProfile, Event, EventRegistration, GroupMember, JobPost, Mentor, Post, User
+from ...services import member_settings
 from . import service as svc
 
 router = APIRouter(prefix="/api/v1/alumni", tags=["Alumni portal"])
@@ -100,7 +101,13 @@ async def suggestions(db: AsyncSession, me: Principal, profile: AlumniProfile, l
         await db.execute(
             select(User, AlumniProfile)
             .join(AlumniProfile, AlumniProfile.user_id == User.id)
-            .where(*await svc.directory_visible_clause(db), AlumniProfile.visibility == "members", User.id != me.id, User.id.not_in(linked))
+            .where(
+                *await svc.directory_visible_clause(db),
+                AlumniProfile.visibility == "members",
+                User.id != me.id,
+                User.id.not_in(linked),
+                User.id.not_in(member_settings.opted_out("suggest_me")),
+            )
             .order_by(score.desc(), AlumniProfile.completion.desc(), User.id)
             .limit(limit)
         )

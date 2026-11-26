@@ -77,7 +77,7 @@ function ProfileSection() {
   );
 }
 
-function PhoneOtpDialog({ onClose }: { onClose: () => void }) {
+export function PhoneOtpDialog({ onClose }: { onClose: () => void }) {
   const { reload } = useAuth();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -98,7 +98,7 @@ function PhoneOtpDialog({ onClose }: { onClose: () => void }) {
 
 type SessionRow = { id: string; user_agent: string | null; ip: string | null; created_at: string; last_used_at: string; current: boolean };
 
-function device(ua: string | null) {
+export function device(ua: string | null) {
   if (!ua) return 'Unknown device';
   const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Device';
   const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
@@ -161,7 +161,7 @@ function SecuritySection() {
   );
 }
 
-function MfaSetupDialog({ onClose }: { onClose: () => void }) {
+export function MfaSetupDialog({ onClose }: { onClose: () => void }) {
   const { reload } = useAuth();
   const setup = useQuery({ queryKey: ['mfa-setup'], queryFn: () => api<{ data: { secret: string; otpauth_uri: string } }>('/api/v1/auth/mfa/setup', { method: 'POST' }), staleTime: Infinity, gcTime: 0 });
   const [code, setCode] = useState('');
@@ -187,7 +187,7 @@ function MfaSetupDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function MfaDisableDialog({ onClose }: { onClose: () => void }) {
+export function MfaDisableDialog({ onClose }: { onClose: () => void }) {
   const { reload } = useAuth();
   const [f, setF] = useState({ password: '', code: '' });
   const off = useAction(() => api('/api/v1/auth/mfa/disable', { method: 'POST', body: f }), { success: 'Two-factor authentication turned off.', onSuccess: () => { reload(); onClose(); } });

@@ -49,3 +49,11 @@ html[dir='rtl'] .ltr-only { direction: ltr; }
   main { padding: 0 !important; max-width: none !important; }
   .shadow-card { box-shadow: none !important; }
 }
+
+/* Settings › Preferences: compact view */
+html[data-density='compact'] main .p-5 { padding: 1rem; }
+html[data-density='compact'] main .p-4 { padding: .75rem; }
+html[data-density='compact'] main .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: .85rem; }
+html[data-density='compact'] main .gap-6 { gap: 1rem; }
+html[data-theme='dark'] img { filter: brightness(.92); }
+html[data-theme='dark'] { color-scheme: dark; }

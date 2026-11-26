@@ -14,16 +14,39 @@ export function initials(name?: string | null) {
     .join('');
 }
 
-const dtf = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(undefined, opts);
+type FormatPrefs = { date: string; time: '12' | '24'; tz?: string };
+let fmt: FormatPrefs = { date: 'DD MMM, YYYY', time: '12' };
+/** Member's date format, 12/24-hour clock and time zone (Settings › Language & Region). */
+export function setFormatPrefs(p: FormatPrefs) { fmt = p; }
+
+const dtf = (opts: Intl.DateTimeFormatOptions) => {
+  try { return new Intl.DateTimeFormat(undefined, { ...opts, ...(fmt.tz ? { timeZone: fmt.tz } : {}) }); } catch { return new Intl.DateTimeFormat(undefined, opts); }
+};
+
+function datePart(d: Date) {
+  const parts = Object.fromEntries(dtf({ day: '2-digit', month: 'short', year: 'numeric' }).formatToParts(d).map((x) => [x.type, x.value]));
+  const num = Object.fromEntries(dtf({ day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d).map((x) => [x.type, x.value]));
+  switch (fmt.date) {
+    case 'MMM DD, YYYY': return `${parts.month} ${parts.day}, ${parts.year}`;
+    case 'DD/MM/YYYY': return `${num.day}/${num.month}/${num.year}`;
+    case 'YYYY-MM-DD': return `${num.year}-${num.month}-${num.day}`;
+    default: return `${parts.day} ${parts.month}, ${parts.year}`;
+  }
+}
+
+export function fmtTime(value?: string | Date | null) {
+  if (!value) return '';
+  return dtf({ hour: 'numeric', minute: '2-digit', hour12: fmt.time !== '24' }).format(new Date(value));
+}
 
 export function fmtDate(value?: string | null) {
   if (!value) return '—';
-  return dtf({ day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+  return datePart(new Date(value));
 }
 
 export function fmtDateTime(value?: string | null) {
   if (!value) return '—';
-  return dtf({ day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+  return `${datePart(new Date(value))}, ${fmtTime(value)}`;
 }
 
 export function timeAgo(value?: string | null) {

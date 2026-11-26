@@ -40,7 +40,7 @@ export function PrivacySection() {
   );
 }
 
-function DeletionDialog({ onClose }: { onClose: () => void }) {
+export function DeletionDialog({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState('');
   const [reason, setReason] = useState('');
   const send = useAction(() => api('/api/v1/account/deletion-request', { method: 'POST', body: { password, reason: reason || null } }),

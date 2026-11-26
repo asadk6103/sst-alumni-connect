@@ -10,6 +10,7 @@ from ...core import settings_store
 from ...core.db import get_db
 from ...core.deps import Principal, require
 from ...models import AlumniProfile, DiscussionGroup, Event, Post, User
+from ...services import member_settings
 from ..alumni import service as alumni
 from ..events.service import image
 from . import service as svc
@@ -37,6 +38,7 @@ async def search(
             .where(
                 *await alumni.directory_visible_clause(db),
                 AlumniProfile.user_id != me.id,
+                AlumniProfile.user_id.not_in(member_settings.opted_out("appear_in_search")),
                 AlumniProfile.search.op("@@")(func.to_tsquery("simple", tq)),
             )
         )

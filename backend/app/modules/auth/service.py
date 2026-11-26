@@ -141,7 +141,8 @@ async def guard_login(db: AsyncSession, request: Request, email: str) -> None:
 
 
 async def record_attempt(db: AsyncSession, request: Request, email: str, success: bool, reason: str | None, user: User | None) -> None:
-    db.add(LoginAttempt(email=email.lower()[:255], ip=client_ip(request), success=success, reason=reason))
+    ua = (request.headers.get("user-agent") or "")[:300] or None
+    db.add(LoginAttempt(email=email.lower()[:255], ip=client_ip(request), success=success, reason=reason, user_agent=ua))
     sec: SecuritySettings = await settings_store.get_group(db, "security")  # type: ignore[assignment]
     key = f"login-fail:{email.lower()}"
     if success:

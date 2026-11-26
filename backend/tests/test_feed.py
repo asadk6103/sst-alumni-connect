@@ -107,7 +107,7 @@ async def test_tags_mentions_comment_reactions(client, installed):
         )
     ).json()["data"]
     assert post["kind"] == "achievement" and post["tagged"][0]["id"] == b_id
-    kinds = [n["kind"] for n in (await client.get("/api/v1/notifications?category=community", headers=auth(b_tok))).json()["data"]]
+    kinds = [n["kind"] for n in (await client.get("/api/v1/notifications?category=mentions", headers=auth(b_tok))).json()["data"]]
     assert "post_tag" in kinds
     c = (
         await client.post(
@@ -117,7 +117,7 @@ async def test_tags_mentions_comment_reactions(client, installed):
         )
     ).json()["data"]
     assert c["mentions"][0]["id"] == a_id
-    kinds = [n["kind"] for n in (await client.get("/api/v1/notifications?category=community", headers=auth(a_tok))).json()["data"]]
+    kinds = [n["kind"] for n in (await client.get("/api/v1/notifications?category=mentions", headers=auth(a_tok))).json()["data"]]
     assert "comment_mention" in kinds  # mention wins over the plain "commented on your post"
     r = (await client.put(f"/api/v1/community/comments/{c['id']}/reaction", headers=auth(a_tok), json={"kind": "haha"})).json()["data"]
     assert r["reactions"] == {"haha": 1} and r["my_reaction"] == "haha"

@@ -22,6 +22,7 @@ ADMIN_MODULES: dict[str, tuple[str, list[str]]] = {
     "achievements": ("Alumni achievements", ["view", "create", "edit", "delete", "approve", "reject", "publish"]),
     "news": ("News and announcements", ["view", "create", "edit", "delete", "publish"]),
     "resources": ("Resource hub", ["view", "create", "edit", "delete", "approve", "reject"]),
+    "support": ("Help desk (support tickets and FAQs)", ["view", "edit"]),
     "gallery": ("Gallery", ["view", "create", "edit", "delete", "publish"]),
     "cms": ("Pages and content", ["view", "create", "edit", "delete", "publish"]),
     "navigation": ("Navigation builder", ["view", "edit"]),
@@ -131,7 +132,7 @@ DEFAULT_ROLES: dict[str, tuple[str, str, bool, set[str]]] = {
         "Alumni Administrator",
         "Manages alumni records, verification, batches and community.",
         True,
-        _admin("dashboard", "alumni", "verification", "batches", "community", "achievements", "reports", "communications")
+        _admin("dashboard", "alumni", "verification", "batches", "community", "achievements", "reports", "communications", "support")
         | _admin("media", actions=("view", "create")),
     ),
     "alumni_coordinator": (

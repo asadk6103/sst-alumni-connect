@@ -13,6 +13,7 @@ from .core import errors, secrets, settings_store
 from .core.config import infra
 from .core.db import SessionLocal, engine
 from .core.metrics import MetricsMiddleware, metrics_endpoint
+from .modules.account import router as account_settings
 from .modules.achievements import router as achievements
 from .modules.admin import audit as admin_audit
 from .modules.admin import dashboard as admin_dashboard
@@ -51,6 +52,7 @@ from .modules.public.router import router as public_router
 from .modules.resources import router as resources
 from .modules.setup.router import announce
 from .modules.setup.router import router as setup_router
+from .modules.support import router as support
 
 logging.basicConfig(level=infra().log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -163,6 +165,9 @@ def create_app() -> FastAPI:
         jobs.router,
         jobs.admin,
         resources.router,
+        account_settings.router,
+        support.router,
+        support.admin,
         resources.admin,
         mentorship_extras.router,
         mentorship.router,

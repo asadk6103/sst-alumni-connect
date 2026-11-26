@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useApplyPrefs } from '@/lib/prefs';
 import {
   BookMarked, Bookmark, Briefcase, CalendarDays, GraduationCap, Home, Mail, Menu as MenuIcon, MessageSquareText, Search, Settings,
   UserRound, Users, UsersRound, X, BookOpen, FolderOpen,
@@ -202,6 +203,7 @@ export function PortalPage({ children, aside, wide }: { children: ReactNode; asi
 
 /** Navy top bar, left sidebar, workspace (the redesigned portal shell). */
 export function PortalLayout() {
+  useApplyPrefs();
   const { user, can } = useAuth();
   const site = useSite();
   const t = useT();

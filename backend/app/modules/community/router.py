@@ -69,6 +69,11 @@ async def feed(
         stmt = stmt.where(Post.author_id == p.id)
     if author_id:
         stmt = stmt.where(Post.author_id == author_id)
+        if author_id != p.id and not p.can("community.view"):
+            from ...services import member_settings
+
+            if not (await member_settings.get(db, author_id))["show_activity"]:
+                return {"data": [], "meta": {"next_cursor": None, "pinned": [], "hidden": True}}
     if filter == "groups":
         stmt = stmt.where(Post.group_id.in_(await svc.member_group_ids(db, p.id) or [uuid.UUID(int=0)]))
     elif filter == "batch":
@@ -91,12 +96,16 @@ async def feed(
             )
         )
         stmt = stmt.where(or_(Post.author_id.in_(followed), Post.author_id.in_(connected)))
+    elif filter == "all" and not group_id and not author_id:
+        stmt = await _apply_feed_prefs(db, p, stmt)
     if q:
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(or_(func.lower(Post.body).like(like), func.lower(Post.title).like(like)))
     from ...models import HiddenPost
+    from ...services import member_settings
 
-    stmt = stmt.where(Post.id.not_in(select(HiddenPost.post_id).where(HiddenPost.user_id == p.id)))
+    if (await member_settings.get(db, p.id))["hide_not_interested"]:
+        stmt = stmt.where(Post.id.not_in(select(HiddenPost.post_id).where(HiddenPost.user_id == p.id)))
     if sort == "relevant":
         # engagement with time decay; offset pagination (cursor "o:<offset>")
         offset = int(cursor[2:]) if cursor and cursor.startswith("o:") and cursor[2:].isdigit() else 0
@@ -142,6 +151,40 @@ class PollIn(BaseModel):
         if len(v) < 2 or len(set(x.lower() for x in v)) != len(v):
             raise ValueError("Add at least two different options.")
         return v
+
+
+FEED_KINDS = {
+    "posts": ["post", "share", "achievement", "article", "poll"],
+    "events": ["event"],
+    "jobs": ["job"],
+    "announcements": ["announcement"],
+}
+
+
+async def _apply_feed_prefs(db: AsyncSession, p: Principal, stmt):
+    """The member's "show me content from" and "content types" preferences (Settings › Preferences)."""
+    from ...models import AlumniProfile
+    from ...services import member_settings
+
+    prefs = await member_settings.get(db, p.id)
+    types = [t for t in prefs["feed_types"] if t in FEED_KINDS]
+    if types and len(types) < len(FEED_KINDS):
+        stmt = stmt.where(or_(Post.kind.in_([k for t in types for k in FEED_KINDS[t]]), Post.author_id == p.id))
+    sources = prefs["feed_sources"]
+    if "all" in sources or not sources:
+        return stmt
+    conds = [Post.author_id == p.id]
+    if "network" in sources:
+        conds.append(Post.author_id.in_(select(AlumniFollow.followee_id).where(AlumniFollow.follower_id == p.id)))
+        conds.append(Post.author_id.in_(svc.connected_subq(p.id)))
+    if "communities" in sources:
+        conds.append(Post.group_id.in_(await svc.member_group_ids(db, p.id) or [uuid.UUID(int=0)]))
+    if "batch" in sources:
+        mine = await db.get(AlumniProfile, p.id)
+        if mine and mine.batch_id:
+            conds.append(Post.author_id.in_(select(AlumniProfile.user_id).where(AlumniProfile.batch_id == mine.batch_id)))
+    conds.append(Post.kind == "announcement")  # office announcements always reach everyone
+    return stmt.where(or_(*conds))
 
 
 class PostIn(BaseModel):
@@ -319,7 +362,7 @@ async def _announce_people(db: AsyncSession, p: Principal, post: Post) -> None:
         await notifications.notify(
             db,
             uid,
-            "community",
+            "mentions",
             "post_tag" if uid in tagged else "post_mention",
             f"{p.full_name} {verb}",
             body=(post.title or post.body)[:140],
@@ -683,7 +726,7 @@ async def add_comment(
         await notifications.notify(
             db,
             uid,
-            "community",
+            "mentions",
             "comment_mention",
             f"{p.full_name} mentioned you in a comment",
             body=c.body[:140],
@@ -695,7 +738,7 @@ async def add_comment(
         await notifications.notify(
             db,
             parent.author_id,
-            "community",
+            "comments",
             "comment_reply",
             f"{p.full_name} replied to your comment",
             body=c.body[:140],
@@ -707,7 +750,7 @@ async def add_comment(
         await notifications.notify(
             db,
             post.author_id,
-            "community",
+            "comments",
             "post_comment",
             f"{p.full_name} commented on your post",
             body=c.body[:140],

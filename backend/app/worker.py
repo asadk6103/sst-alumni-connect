@@ -8,6 +8,7 @@ database transaction commits, and a periodic sweep re-dispatches rows still mark
 import logging
 
 from celery import Celery
+from celery.schedules import crontab
 from sqlalchemy import event
 
 from .core.config import infra
@@ -28,6 +29,8 @@ celery_app.conf.update(
         "cleanup": {"task": "app.tasks.cleanup", "schedule": 3600.0},
         "event-reminders": {"task": "app.tasks.event_reminders", "schedule": 900.0},
         "newsletters": {"task": "app.tasks.scheduled_newsletters", "schedule": 60.0},
+        # Monday 05:00 UTC (10:00 PKT)
+        "weekly-digest": {"task": "app.tasks.weekly_digest", "schedule": crontab(hour=5, minute=0, day_of_week=1)},
     },
 )
 

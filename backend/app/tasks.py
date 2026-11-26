@@ -149,6 +149,17 @@ def scheduled_newsletters():
     return _run(_scheduled_newsletters)
 
 
+async def _weekly_digest(db) -> int:
+    from .services.digest import send_weekly_digests
+
+    return await send_weekly_digests(db)
+
+
+@celery_app.task(name="app.tasks.weekly_digest")
+def weekly_digest():
+    return _run(_weekly_digest)
+
+
 __all__ = ["dispatch"]
 
 

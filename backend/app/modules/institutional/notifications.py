@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.db import get_db
 from ...core.deps import Principal, current_user
 from ...models import Notification, NotificationPreference
-from ...services.notifications import CATEGORIES
+from ...services.notifications import CATEGORIES, OFF_BY_DEFAULT, SMS_CATEGORIES
 from ..community.service import authors
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
@@ -105,8 +105,10 @@ async def preferences(me: Principal = Depends(current_user), db: AsyncSession = 
                 "label": label,
                 "description": desc,
                 "in_app": stored[k].in_app if k in stored else True,
-                "email": stored[k].email if k in stored else True,
+                "email": stored[k].email if k in stored else k not in OFF_BY_DEFAULT,
                 "push": stored[k].push if k in stored else True,
+                "sms": stored[k].sms if k in stored else False,
+                "sms_available": k in SMS_CATEGORIES,
             }
             for k, (label, desc) in CATEGORIES.items()
         ]
@@ -118,6 +120,7 @@ class PrefIn(BaseModel):
     in_app: bool
     email: bool
     push: bool | None = None  # mobile app; omitted by older clients = keep
+    sms: bool | None = None
 
 
 @router.put("/preferences", summary="Update your notification preferences")
@@ -130,10 +133,17 @@ async def set_preferences(body: list[PrefIn], me: Principal = Depends(current_us
             row.in_app, row.email = p.in_app, p.email
             if p.push is not None:
                 row.push = p.push
+            if p.sms is not None:
+                row.sms = p.sms and p.category in SMS_CATEGORIES
         else:
             db.add(
                 NotificationPreference(
-                    user_id=me.id, category=p.category, in_app=p.in_app, email=p.email, push=True if p.push is None else p.push
+                    user_id=me.id,
+                    category=p.category,
+                    in_app=p.in_app,
+                    email=p.email,
+                    push=True if p.push is None else p.push,
+                    sms=bool(p.sms) and p.category in SMS_CATEGORIES,
                 )
             )
     await db.flush()

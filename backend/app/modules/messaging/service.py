@@ -80,10 +80,38 @@ async def may_contact(db: AsyncSession, me: Principal, other_id: uuid.UUID) -> N
     ).first()
     if connected:
         return
+    from ...services import member_settings
+
+    prefs = await member_settings.get(db, other_id)
     mine, theirs = await db.get(AlumniProfile, me.id), await db.get(AlumniProfile, other_id)
-    if mine and theirs and mine.batch_id and mine.batch_id == theirs.batch_id and theirs.verification_status == "verified":
+    verified_me = bool(mine and mine.verification_status == "verified")
+    if (
+        prefs["msg_batchmates"]
+        and mine
+        and theirs
+        and mine.batch_id
+        and mine.batch_id == theirs.batch_id
+        and theirs.verification_status == "verified"
+    ):
         return
-    raise forbidden("You can message your connections and batchmates. Send a connection request first.")
+    if prefs["msg_alumni"] and verified_me:
+        return
+    if prefs["msg_community"]:
+        from ...models import DiscussionGroup, GroupMember
+
+        g2 = GroupMember.__table__.alias("g2")
+        shared = (
+            await db.execute(
+                select(GroupMember.group_id)
+                .join(DiscussionGroup, DiscussionGroup.id == GroupMember.group_id)
+                .join(g2, and_(g2.c.group_id == GroupMember.group_id, g2.c.user_id == other_id, g2.c.status == "active"))
+                .where(GroupMember.user_id == me.id, GroupMember.status == "active", DiscussionGroup.status == "active")
+                .limit(1)
+            )
+        ).first()
+        if shared:
+            return
+    raise forbidden("This member accepts messages from their connections only. Send a connection request first.")
 
 
 async def member(db: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID) -> ConversationMember:
@@ -270,7 +298,19 @@ async def _receipt_floor(db: AsyncSession, conv_id: uuid.UUID, me: uuid.UUID) ->
             .where(MessageReceipt.conversation_id == conv_id, MessageReceipt.user_id != me, ConversationMember.left_at.is_(None))
         )
     ).one()
-    return row[0], row[1]
+    from ...services import member_settings
+
+    hidden = (
+        await db.execute(
+            select(ConversationMember.user_id).where(
+                ConversationMember.conversation_id == conv_id,
+                ConversationMember.user_id != me,
+                ConversationMember.left_at.is_(None),
+                ConversationMember.user_id.in_(member_settings.opted_out("read_receipts")),
+            )
+        )
+    ).first()
+    return row[0], (None if hidden else row[1])  # someone who hides read receipts never shows "read"
 
 
 async def messages_out(db: AsyncSession, me: uuid.UUID, msgs: list[Message]) -> list[dict]:

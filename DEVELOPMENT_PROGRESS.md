@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 5 of 6 done** (Stages 1–6 complete) · then: mobile app
+Last updated: 2026-11-26 · Current stage: **Portal redesign complete (phases 1–6)** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -74,8 +74,22 @@ Starred tabs (new starred chats), richer chat header (online, class, headline), 
 attachment cards, rounded composer with emoji picker. Voice / video calls stay hidden. Migrations `0015_resources`,
 `0016_starred`. Tests: 67 backend; `e2e-redesign-5.mjs` passes (desktop + 390 px).
 
-Next phases:
-6 Settings (all sections), support tickets and FAQs.
+**Phase 6 (done)** — Settings with ten sections (Account & Privacy, Notifications, Security, Connections, Visibility,
+Communities, Preferences, Language & Region, Data & Privacy, Help & Support), each with its side panels. New per-member
+settings (`member_settings`) are enforced on the server: hide from directory / search / suggestions, online status,
+mutual connections, activity and connections on the profile, who can send connection requests (anyone / batch /
+±5 years / nobody), who can message (batchmates / all alumni / community members), followers, read receipts, who can
+invite to communities, login alerts, feed sources / content types / hidden posts. Appearance (light / dark / system,
+font size, compact), date / time format and time zone apply across the portal. Self-deactivation (signing in again
+reactivates), "remember this device" for two-factor (30 days) with trusted-device management, new recovery codes,
+login activity with device names, security checkup and score. Notifications: SMS channel (important categories,
+verified mobile) and new categories (mentions, comments & reactions, news, marketing, support); weekly email digest
+(Monday task). Data requests list (exports recorded). Help & Support: tickets with attachments, replies and status;
+FAQs and contact details; admin "Help Desk" page (tickets, FAQs; permission `support.*`). Migration `0017_settings`.
+Tests: 70 backend; `e2e-redesign-6.mjs` passes (desktop + 390 px).
+
+**Portal redesign complete (phases 1–6).**
+
 
 ## Completed (Stage 6 — Production readiness)
 

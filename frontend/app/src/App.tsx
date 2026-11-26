@@ -8,7 +8,7 @@ import { PortalLayout } from '@/layouts/PortalLayout';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/display';
 import { ForgotPasswordPage, LoginPage, ResetPasswordPage, VerifyEmailPage } from '@/pages/auth/pages';
-import { AccountPage } from '@/pages/portal/Account';
+import { SettingsPage } from '@/pages/portal/Settings';
 import { FeedPage } from '@/pages/portal/Feed';
 
 const RegisterPage = lazy(() => import('@/pages/auth/Register').then((m) => ({ default: m.RegisterPage })));
@@ -21,6 +21,7 @@ const FindAlumniPage = lazy(() => import('@/pages/portal/Network').then((m) => (
 const SavedPostsPage = lazy(() => import('@/pages/portal/Feed').then((m) => ({ default: m.SavedPostsPage })));
 const community = () => import('@/pages/portal/Community');
 const communities = () => import('./pages/portal/Communities');
+const SupportAdminPage = lazy(() => import('./pages/admin/Support').then((m) => ({ default: m.SupportAdminPage })));
 const ResourcesAdminPage = lazy(() => import('./pages/admin/Resources').then((m) => ({ default: m.ResourcesAdminPage })));
 const ResourcesPage = lazy(() => import('./pages/portal/Resources').then((m) => ({ default: m.ResourcesPage })));
 const GroupsPage = lazy(() => communities().then((m) => ({ default: m.GroupsPage })));
@@ -134,6 +135,7 @@ export function App() {
         <Route path="gallery" element={<RequirePerm perms={perm('/admin/gallery')}><GalleryAdminPage /></RequirePerm>} />
         <Route path="news" element={<RequirePerm perms={perm('/admin/news')}><NewsAdminPage /></RequirePerm>} />
         <Route path="resources" element={<RequirePerm perms={perm('/admin/resources')}><Lazy><ResourcesAdminPage /></Lazy></RequirePerm>} />
+        <Route path="support" element={<RequirePerm perms={perm('/admin/support')}><Lazy><SupportAdminPage /></Lazy></RequirePerm>} />
         <Route path="custom-fields" element={<RequirePerm perms={perm('/admin/custom-fields')}><CustomFieldsAdminPage /></RequirePerm>} />
         <Route path="reports/:key?" element={<RequirePerm perms={perm('/admin/reports')}><ReportsPage /></RequirePerm>} />
         <Route path="privacy" element={<RequirePerm perms={perm('/admin/privacy')}><PrivacyAdminPage /></RequirePerm>} />
@@ -183,7 +185,7 @@ export function App() {
         <Route path="notifications" element={<Lazy><NotificationsPage /></Lazy>} />
         <Route path="news" element={<Lazy><NewsPage /></Lazy>} />
         <Route path="news/:slug" element={<Lazy><ArticlePage /></Lazy>} />
-        <Route path="account/:section?" element={<AccountPage />} />
+        <Route path="account/:section?" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
 

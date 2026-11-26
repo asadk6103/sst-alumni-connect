@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { FolderOpen, UserX, Activity, BarChart3, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
+import { FolderOpen, LifeBuoy, UserX, Activity, BarChart3, ListPlus, Megaphone, BadgeCheck, Briefcase, HandHeart, Images, Newspaper, CalendarDays, Medal, UsersRound, FileClock, Gauge, GraduationCap, Image as ImageIcon, KeyRound, Layers, Mail, MessagesSquare, Menu as MenuIcon, Settings, ShieldCheck, Users,
   X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSite } from '@/lib/site';
@@ -27,6 +27,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/newsletters', label: 'Newsletters', icon: Newspaper, perms: ['communications.view'] },
   { to: '/admin/news', label: 'News & Announcements', icon: Megaphone, perms: ['news.view'] },
   { to: '/admin/resources', label: 'Resource Hub', icon: FolderOpen, perms: ['resources.view'] },
+  { to: '/admin/support', label: 'Help Desk', icon: LifeBuoy, perms: ['support.view'] },
   { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3, perms: ['reports.view'] },
   { to: '/admin/custom-fields', label: 'Custom Fields', icon: ListPlus, perms: ['custom_fields.view'] },
   { to: '/admin/users', label: 'User Management', icon: Users, perms: ['users.view'] },

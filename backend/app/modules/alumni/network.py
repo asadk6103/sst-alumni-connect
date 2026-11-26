@@ -10,7 +10,7 @@ from ...core.db import get_db
 from ...core.deps import Principal, require
 from ...core.redis import enforce
 from ...models import AlumniConnection, AlumniFollow, AlumniProfile, Comment, DiscussionGroup, GroupMember, Media, Post, PostMedia, User
-from ...services import media
+from ...services import media, member_settings
 from . import service as svc
 from .dashboard import suggestions as suggest
 from .portal import _me, _target, directory
@@ -32,7 +32,12 @@ async def summary(me: Principal = Depends(require("portal.directory")), db: Asyn
         select(func.count())
         .select_from(AlumniProfile)
         .join(User, User.id == AlumniProfile.user_id)
-        .where(*await svc.directory_visible_clause(db), AlumniProfile.visibility != "hidden", AlumniProfile.user_id != me.id)
+        .where(
+            *await svc.directory_visible_clause(db),
+            AlumniProfile.visibility != "hidden",
+            AlumniProfile.user_id != me.id,
+            AlumniProfile.user_id.not_in(member_settings.opted_out("suggest_me")),
+        )
     )
     loc_pub = func.coalesce(AlumniProfile.privacy["location"].astext, "members") == "members"
     car_pub = func.coalesce(AlumniProfile.privacy["career"].astext, "members") == "members"
@@ -219,8 +224,12 @@ async def overview(user_id: uuid.UUID, me: Principal = Depends(require("portal.d
         .scalars()
         .all()
     )
+    prefs = await member_settings.get(db, user.id)
+    own = me.id == user.id or me.can("alumni.view")
     communities = [
-        {"id": str(g.id), "name": g.name, "member_count": g.member_count, "cover": await svc.photo_out(db, g.cover_id)} for g in rows
+        {"id": str(g.id), "name": g.name, "member_count": g.member_count, "cover": await svc.photo_out(db, g.cover_id)}
+        for g in rows
+        if own or prefs["show_communities"]
     ]
     # photos & memories: images from their posts that the viewer can see
     photo_q = (
@@ -243,6 +252,8 @@ async def overview(user_id: uuid.UUID, me: Principal = Depends(require("portal.d
         )
     ).all()
     people = [{"id": str(u.id), "full_name": u.full_name, "photo": await svc.photo_out(db, pr.photo_id)} for u, pr in faces]
+    if not (own or prefs["show_connections"]):
+        people, conn = [], []
     posts = (
         await db.execute(select(func.count()).select_from(Post).where(Post.author_id == user.id, _post_scope(me, my_groups)))
     ).scalar_one()
@@ -253,6 +264,8 @@ async def overview(user_id: uuid.UUID, me: Principal = Depends(require("portal.d
             "photo_count": total_photos,
             "connections": people,
             "connection_count": len(conn),
+            "connections_hidden": not (own or prefs["show_connections"]),
+            "communities_hidden": not (own or prefs["show_communities"]),
             "post_count": posts,
         }
     }
@@ -268,6 +281,8 @@ async def activity(
     user, profile, viewer = await _target(db, me, user_id)
     from ..community.service import member_group_ids
 
+    if user.id != me.id and not me.can("alumni.view") and not (await member_settings.get(db, user.id))["show_activity"]:
+        return {"data": [], "meta": {"hidden": True}}
     groups = await member_group_ids(db, me.id)
     posts = (
         (

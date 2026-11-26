@@ -38,6 +38,7 @@ class NotificationPreference(Base):
     in_app: Mapped[bool] = mapped_column(Boolean, default=True)
     email: Mapped[bool] = mapped_column(Boolean, default=True)
     push: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    sms: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
 
 # ── donations and scholarships ──────────────────────────────────────────────

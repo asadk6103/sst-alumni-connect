@@ -15,20 +15,31 @@ from . import live, messaging
 CATEGORIES: dict[str, tuple[str, str]] = {
     "connections": ("Connections", "Connection requests and accepted requests."),
     "verification": ("Verification", "Decisions on your profile verification."),
-    "community": ("Community", "Group decisions and moderation of your posts."),
+    "community": ("Community updates", "New posts in your communities, group decisions and moderation of your posts."),
+    "mentions": ("Posts & mentions", "When someone tags or @mentions you."),
+    "comments": ("Comments & reactions", "Comments on your posts and replies to your comments."),
     "events": ("Events", "Registrations, waitlist places, reminders and cancellations."),
     "jobs": ("Jobs", "Applications to your jobs and updates on your applications."),
     "mentorship": ("Mentorship", "Requests, replies, sessions and feedback."),
     "achievements": ("Achievements", "When your achievement is published."),
     "donations": ("Donations", "Pledges, confirmations and receipts."),
     "messages": ("Messages", "New private and group messages (mobile app)."),
-    "announcements": ("Announcements", "News and announcements from the alumni office (mobile app)."),
+    "announcements": ("Platform announcements", "Announcements from the alumni office."),
+    "news": ("News & publications", "News articles and alumni publications."),
+    "marketing": ("Marketing & updates", "New features, surveys and occasional offers."),
+    "support": ("Support requests", "Replies and updates on your support tickets."),
 }
+
+
+OFF_BY_DEFAULT = {"marketing"}  # email off until the member opts in
+SMS_CATEGORIES = {"messages", "connections", "events", "jobs", "mentorship", "announcements", "support"}
 
 
 async def preference(db: AsyncSession, user_id: uuid.UUID, category: str) -> NotificationPreference:
     pref = await db.get(NotificationPreference, (user_id, category))
-    return pref or NotificationPreference(user_id=user_id, category=category, in_app=True, email=True, push=True)
+    return pref or NotificationPreference(
+        user_id=user_id, category=category, in_app=True, email=category not in OFF_BY_DEFAULT, push=True, sms=False
+    )
 
 
 async def notify(
@@ -55,6 +66,10 @@ async def notify(
         from . import push
 
         await push.queue(db, [user_id], title, body, {"link": link, "kind": kind}, category=category)
+    if pref.sms and category in SMS_CATEGORIES:
+        u = await db.get(User, user_id)
+        if u and u.phone and u.phone_verified_at and not u.deleted_at and u.status == "active":
+            await messaging.queue_sms(db, u.phone, "notification.sms", {"title": title[:120]}, u.language or "en")
     if email and pref.email:
         u = await db.get(User, user_id)
         if u and not u.deleted_at and u.status != "deactivated":
