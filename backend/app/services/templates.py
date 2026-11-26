@@ -40,6 +40,25 @@ DEFAULT_TEMPLATES: list[tuple[str, str, str, str | None, str, list[str]]] = [
         ["name", "link", "hours", "app_name"],
     ),
     (
+        "auth.verify_email_code",
+        "email",
+        "Email verification code",
+        "{{code}} is your {{app_name}} verification code",
+        "<p>Hello {{name}},</p><p>Enter this code in the app to verify your email address:</p>"
+        '<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{code}}</p><p>The code expires in {{minutes}} minutes.</p>',
+        ["name", "code", "minutes", "app_name"],
+    ),
+    (
+        "auth.password_reset_code",
+        "email",
+        "Password reset code",
+        "{{code}} is your {{app_name}} password reset code",
+        "<p>Hello {{name}},</p><p>Enter this code in the app to reset your password:</p>"
+        '<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{code}}</p>'
+        "<p>The code expires in {{minutes}} minutes. If you did not ask for this, ignore this email.</p>",
+        ["name", "code", "minutes", "app_name"],
+    ),
+    (
         "auth.password_reset",
         "email",
         "Password reset",

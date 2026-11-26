@@ -108,9 +108,10 @@ async def register(body: RegisterIn, request: Request, db: AsyncSession = Depend
     await mark_joined(db, user, body.invite)
     await svc.refresh_search(db, user.id)
     if verify_email:
+        from ..auth import service as svc_auth
         from ..auth.router import send_email_verification
 
-        await send_email_verification(db, user)
+        await send_email_verification(db, user, code=svc_auth.is_mobile(request))
     else:
         await svc.try_auto_verify(db, user)
     if cfg.new_registration_email:

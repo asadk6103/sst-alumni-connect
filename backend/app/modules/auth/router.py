@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr, Field
@@ -89,6 +90,15 @@ async def _trust_device(db: AsyncSession, request: Request, response: Response, 
 
 class EmailIn(BaseModel):
     email: EmailStr
+
+
+class EmailCodeIn(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=12)
+
+
+class ForgotIn(EmailIn):
+    method: Literal["link", "code"] = "link"  # the mobile app asks for a 6-digit code
 
 
 class ResetIn(BaseModel):
@@ -364,11 +374,17 @@ async def end_session(session_id: uuid.UUID, p: Principal = Depends(current_user
 
 # ── passwords ────────────────────────────────────────────────────────────────
 @router.post("/password/forgot", status_code=202, summary="Email a password-reset link")
-async def forgot(body: EmailIn, request: Request, db: AsyncSession = Depends(get_db)):
+async def forgot(body: ForgotIn, request: Request, db: AsyncSession = Depends(get_db)):
     await enforce(f"forgot-ip:{client_ip(request)}", 10, 3600)
     await enforce(f"forgot:{body.email.lower()}", 3, 3600)
     user = await _find_user(db, body.email)
-    if user and user.status != "deactivated":
+    if user and user.status != "deactivated" and body.method == "code":
+        c = random_code(6)
+        await svc.create_verification(db, user, "password_code", code_hash(user.id, c), timedelta(minutes=15))
+        await messaging.queue_email(
+            db, user.email, "auth.password_reset_code", {"name": user.full_name, "code": c, "minutes": 15}, user.language or "en"
+        )
+    elif user and user.status != "deactivated":
         token = random_token(32)
         await svc.create_verification(db, user, "password_reset", token_hash(token), timedelta(minutes=60))
         general = await _general(db)
@@ -381,6 +397,15 @@ async def forgot(body: EmailIn, request: Request, db: AsyncSession = Depends(get
         )
     # Same answer whether or not the account exists.
     return {"data": {"message": "If an account exists for that email, a reset link is on its way."}}
+
+
+@router.post("/password/verify-code", summary="Exchange the emailed 6-digit code for a reset token (mobile app)")
+async def verify_reset_code(body: EmailCodeIn, request: Request, db: AsyncSession = Depends(get_db)):
+    await enforce(f"reset-code-ip:{client_ip(request)}", 30, 3600)
+    user, _ = await _check_code(db, body.email, "password_code", body.code)
+    token = random_token(32)
+    await svc.create_verification(db, user, "password_reset", token_hash(token), timedelta(minutes=15))
+    return {"data": {"token": token}}
 
 
 @router.post("/password/reset", summary="Set a new password using a reset link")
@@ -440,7 +465,15 @@ async def change_password(
 
 
 # ── email verification ──────────────────────────────────────────────────────
-async def send_email_verification(db: AsyncSession, user: User) -> None:
+async def send_email_verification(db: AsyncSession, user: User, code: bool = False) -> None:
+    """Web: an emailed link. Mobile app: a 6-digit code typed into the app."""
+    if code:
+        c = random_code(6)
+        await svc.create_verification(db, user, "email_code", code_hash(user.id, c), timedelta(minutes=30))
+        await messaging.queue_email(
+            db, user.email, "auth.verify_email_code", {"name": user.full_name, "code": c, "minutes": 30}, user.language or "en"
+        )
+        return
     token = random_token(32)
     await svc.create_verification(db, user, "email", token_hash(token), timedelta(hours=48))
     general = await _general(db)
@@ -472,8 +505,47 @@ async def resend_verification(body: EmailIn, request: Request, db: AsyncSession 
     await enforce(f"resend:{body.email.lower()}", 3, 3600)
     user = await _find_user(db, body.email)
     if user and not user.email_verified_at and user.status != "deactivated":
-        await send_email_verification(db, user)
+        await send_email_verification(db, user, code=svc.is_mobile(request))
     return {"data": {"message": "If the address needs verifying, a new link is on its way."}}
+
+
+async def _check_code(db: AsyncSession, email: str, kind: str, code: str) -> tuple[User, object]:
+    from ...models import UserVerification
+
+    user = await _find_user(db, email)
+    v = None
+    if user:
+        v = (
+            (
+                await db.execute(
+                    select(UserVerification)
+                    .where(UserVerification.user_id == user.id, UserVerification.kind == kind, UserVerification.consumed_at.is_(None))
+                    .order_by(UserVerification.created_at.desc())
+                )
+            )
+            .scalars()
+            .first()
+        )
+    if not user or not v or v.expires_at <= svc.now() or v.attempts >= 5:
+        raise AppError(400, "INVALID_CODE", "The code has expired. Please request a new one.")
+    if v.secret_hash != code_hash(user.id, code.strip()):
+        v.attempts += 1
+        await db.commit()
+        raise AppError(400, "INVALID_CODE", "The code is not correct.")
+    v.consumed_at = svc.now()
+    return user, v
+
+
+@router.post("/email/verify-code", summary="Confirm an email address with the 6-digit code (mobile app)")
+async def verify_email_code(body: EmailCodeIn, request: Request, db: AsyncSession = Depends(get_db)):
+    await enforce(f"verify-code-ip:{client_ip(request)}", 30, 3600)
+    user, _ = await _check_code(db, body.email, "email_code", body.code)
+    user.email_verified_at = svc.now()
+    if user.status == "pending":
+        user.status = "active"
+    forget_principals(user.id)
+    await _alumni_contact_proven(db, user)
+    return {"data": {"ok": True}}
 
 
 # ── mobile verification ─────────────────────────────────────────────────────
