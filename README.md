@@ -10,13 +10,24 @@
 
 Development status and stage plan: [DEVELOPMENT_PROGRESS.md](DEVELOPMENT_PROGRESS.md).
 
-## Install (Docker Compose)
+## Install
+
+Full guide: **[install/README.md](install/README.md)**
 
 ```bash
-cp .env.example .env              # optional — every value has a safe default
-docker compose up -d --build      # or: ./infrastructure/scripts/install.sh
-docker compose logs api           # copy the one-time setup code
+./install/install-docker.sh                                                  # Docker: http://<server>:8080/
+./install/install-docker.sh --domain alumni.school.pk --email it@school.pk   # Docker + HTTPS (Let's Encrypt)
+./install/install-docker.sh --production                                     # Docker, production sizing
+sudo ./install/install-baremetal.sh                                          # Ubuntu/Debian without Docker: http://<server>/
+sudo ./install/install-baremetal.sh --domain alumni.school.pk --email it@school.pk   # bare metal + HTTPS
 ```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install\install-docker.ps1        # Windows (Docker Desktop)
+```
+
+The installer prints a one-time setup code. Prefer plain Docker Compose? Run `docker compose up -d --build`,
+then `docker compose logs api` to see the code.
 
 Open **http://localhost:8080/setup** and complete the 10-step setup wizard (institution, branding, first
 administrator, email, storage, security). No passwords are kept in files: database, Redis and object-storage

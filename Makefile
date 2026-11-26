@@ -9,8 +9,8 @@ PROD_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
-install:         ## First installation (builds, starts, prints the setup code)
-	./infrastructure/scripts/install.sh
+install:         ## Install / upgrade with Docker (see install/README.md; HTTPS: make install args="--domain d --email e")
+	./install/install-docker.sh $(args)
 
 up:              ## Start / update the stack
 	$(COMPOSE) up -d --build

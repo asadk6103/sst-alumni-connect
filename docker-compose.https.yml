@@ -1,4 +1,6 @@
-# HTTPS overlay — adds a TLS edge on ports 80/443 in front of the main nginx.
+# HTTPS overlay with your OWN certificate — adds a TLS edge on ports 80/443 in front of the main nginx.
+# For a free, automatically renewed Let's Encrypt certificate use docker-compose.letsencrypt.yml instead
+# (./install/install-docker.sh --domain … --email …).
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.https.yml up -d
 # Put certs/fullchain.pem and certs/privkey.pem next to this file first (docs/DEPLOYMENT.md → HTTPS).
 services:
@@ -6,6 +8,14 @@ services:
     # Only the TLS edge is reachable from outside; keep a loopback port for health checks on the host.
     ports: !override
       - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+  # Two proxies (TLS edge → nginx) sit in front of the backend: needed for correct client IP addresses.
+  api:
+    environment:
+      TRUSTED_PROXIES: "2"
+  realtime:
+    environment:
+      TRUSTED_PROXIES: "2"
 
   tls:
     image: nginx:1.27.3-alpine

@@ -55,8 +55,13 @@ Lost the code? `docker compose exec api python -m app.cli setup-code`.
 Locked out? `docker compose exec -it api python -m app.cli reset-password <email>` or `create-admin <email> "<name>"`.
 
 ## HTTPS
-Built in: a TLS edge (`docker-compose.https.yml`) listens on 80/443, redirects HTTP to HTTPS, sends HSTS and forwards
-to nginx with `X-Forwarded-Proto: https` (secure cookies). WebSockets work through it.
+**Automatic (recommended):** `./install/install-docker.sh --domain alumni.example.org --email it@example.org`.
+This adds Caddy (`docker-compose.letsencrypt.yml`), which gets and renews a Let's Encrypt certificate by itself.
+On bare metal, `sudo ./install/install-baremetal.sh --domain … --email …` uses certbot. See
+[install/README.md](../install/README.md).
+
+**Own certificate:** a TLS edge (`docker-compose.https.yml`) listens on 80/443. It redirects HTTP to HTTPS, sends HSTS and
+forwards to nginx with `X-Forwarded-Proto: https` (secure cookies). WebSockets work through it.
 
 1. Point the domain's DNS to the server.
 2. Get a certificate. With Let's Encrypt (first time, nothing listening on port 80 yet):

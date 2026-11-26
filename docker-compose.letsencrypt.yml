@@ -1,0 +1,70 @@
+# SST Alumni Connect — automatic HTTPS (Let's Encrypt) for the Docker Compose stack.
+#
+# Adds a Caddy container in front of nginx. Caddy obtains the certificate from Let's Encrypt,
+# renews it automatically, redirects http:// to https://, sends HSTS and serves HTTP/2 and HTTP/3.
+# WebSockets (real-time gateway) pass through unchanged.
+#
+# Enabled by the installer (./install/install-docker.sh --domain … --email …), which writes
+# these lines to .env so plain `docker compose …` commands keep using it:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.letsencrypt.yml   (+ docker-compose.prod.yml with --production)
+#   COMPOSE_PATH_SEPARATOR=:
+#   DOMAIN=alumni.example.edu.pk          (several: "alumni.example.edu.pk, www.alumni.example.edu.pk")
+#   ACME_EMAIL=it@example.edu.pk          (Let's Encrypt expiry notices)
+#   ACME_CA=…                             optional, e.g. the Let's Encrypt staging URL for tests
+#
+# Requirements: DOMAIN must point (DNS A/AAAA record) to this server, and ports 80 and 443 must be
+# reachable from the internet. Needs Docker Compose 2.24 or newer.
+# Using the institution's own certificate instead? See docker-compose.https.yml.
+
+services:
+  https:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy_data:/data       # certificates and ACME account — keep this volume
+      - caddy_config:/config
+    depends_on: [nginx]
+    networks: [edge]
+    deploy: { resources: { limits: { memory: 256m } } }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # nginx is now only reachable through Caddy; the loopback port stays for health checks on the host.
+  nginx:
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+  # Two proxies (Caddy → nginx) sit in front of the backend: needed for correct client IP addresses.
+  api:
+    environment:
+      TRUSTED_PROXIES: "2"
+  realtime:
+    environment:
+      TRUSTED_PROXIES: "2"
+
+configs:
+  caddyfile:
+    content: |
+      {
+        email ${ACME_EMAIL:?set ACME_EMAIL in .env (used by Let's Encrypt)}
+        acme_ca ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      }
+
+      ${DOMAIN:?set DOMAIN in .env (e.g. alumni.example.edu.pk)} {
+        header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        reverse_proxy nginx:80 {
+          flush_interval -1
+        }
+      }
+
+volumes:
+  caddy_data:
+  caddy_config:
