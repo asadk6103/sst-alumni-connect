@@ -189,7 +189,9 @@ async def create_post(
             return {"data": (await svc.serialize(db, p, [existing]))[0]}
     await enforce(f"post:{p.id}", 20, 3600, "You are posting very often. Please wait a little.")
     if body.announcement and not p.can("community.publish"):
-        raise forbidden("Only community administrators can publish announcements.")
+        g = await db.get(DiscussionGroup, body.group_id) if body.group_id else None
+        if not g or not await svc.can_manage_group(db, p, g):
+            raise forbidden("Only community administrators can publish announcements.")
     if body.kind == "poll" and not body.poll:
         raise AppError(422, "VALIDATION_ERROR", "Add the poll question and options.", [{"field": "poll", "message": "Required."}])
     if body.kind == "article" and not (body.title and len(body.body) >= 50):
@@ -238,8 +240,10 @@ async def create_post(
     files = []
     for mid in dict.fromkeys(body.media_ids):
         m = await db.get(Media, mid)
-        if not m or m.deleted_at or m.uploaded_by != p.id or m.folder != "posts" or not m.mime.startswith(("image/", "video/")):
+        if not m or m.deleted_at or m.uploaded_by != p.id or m.folder != "posts":
             raise AppError(422, "INVALID_MEDIA", "One of the photos or videos is not available. Upload it again.")
+        if not m.mime.startswith(("image/", "video/")) and not body.group_id:
+            raise AppError(422, "INVALID_MEDIA", "Documents can be shared in communities only.")
         files.append(m)
     post = Post(
         author_id=p.id,
@@ -276,6 +280,10 @@ async def create_post(
     if post.status == "draft":
         return {"data": (await svc.serialize(db, p, [post]))[0]}
     await _announce_people(db, p, post)
+    if group:
+        from .groups import notify_members
+
+        await notify_members(db, p, group, post)
     live.emit_to_room(
         db,
         svc.room_of(post),
@@ -549,7 +557,10 @@ async def reactors(post_id: uuid.UUID, p: Principal = Depends(reader), db: Async
     return {"data": [{"kind": r.kind, "user": people.get(r.user_id)} for r in rows]}
 
 
-@router.post("/uploads", status_code=201, summary="Upload a photo for a post")
+DOC_TYPES = ("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv")
+
+
+@router.post("/uploads", status_code=201, summary="Upload a photo, video or (for communities) a document for a post")
 async def upload(
     file: UploadFile = File(...),
     p: Principal = Depends(require("portal.post", "community.publish", any_of=True)),
@@ -558,20 +569,33 @@ async def upload(
     await enforce(f"post-upload:{p.id}", 60, 3600)
     data = await file.read()
     name = file.filename or "photo"
-    is_video = (file.content_type or "").startswith("video/") or name.lower().rsplit(".", 1)[-1] in ("mp4", "webm", "mov", "m4v")
+    ext = name.lower().rsplit(".", 1)[-1]
+    is_video = (file.content_type or "").startswith("video/") or ext in ("mp4", "webm", "mov", "m4v")
+    is_doc = ext in DOC_TYPES
     m = await media.upload(
         db,
         data=data,
         filename=name,
         folder="posts",
-        images_only=not is_video,
+        images_only=not (is_video or is_doc),
         actor=p.id,
-        extra_types=("mp4", "webm", "mov", "m4v") if is_video else (),
+        extra_types=("mp4", "webm", "mov", "m4v") if is_video else DOC_TYPES if is_doc else (),
     )
     if is_video and not m.mime.startswith("video/"):
         raise AppError(415, "VIDEO_REQUIRED", "Upload an MP4, WebM or MOV video.")
     pub = await media.to_public(db, m)
-    return {"data": {"id": str(m.id), "url": pub["url"], "variants": pub["variants"], "width": m.width, "height": m.height}}
+    return {
+        "data": {
+            "id": str(m.id),
+            "url": pub["url"],
+            "variants": pub["variants"],
+            "width": m.width,
+            "height": m.height,
+            "mime": m.mime,
+            "filename": m.filename,
+            "size": m.size,
+        }
+    }
 
 
 # ── comments ────────────────────────────────────────────────────────────────
@@ -808,12 +832,16 @@ async def report(body: ReportIn, p: Principal = Depends(reader), db: AsyncSessio
     return {"data": {"message": "Thank you. The moderators will review it."}}
 
 
+GROUP_CATEGORIES = Literal["professional", "interest", "career", "higher_studies", "social_impact", "events"]
+
+
 # ── groups ──────────────────────────────────────────────────────────────────
 @router.get("/groups", summary="Your groups, or groups to discover")
 async def list_groups(
-    scope: Literal["mine", "discover"] = "mine",
+    scope: Literal["mine", "discover", "all"] = "mine",
     q: str | None = Query(None, max_length=100),
     kind: Literal["batch", "interest", "forum"] | None = None,
+    category: str | None = Query(None, max_length=30),
     p: Principal = Depends(reader),
     db: AsyncSession = Depends(get_db),
 ):
@@ -830,8 +858,12 @@ async def list_groups(
                 and_(DiscussionGroup.created_by == p.id, DiscussionGroup.status == "pending"),
             )
         )
-    else:
+    elif scope == "discover":
         stmt = stmt.where(DiscussionGroup.kind != "batch", DiscussionGroup.id.not_in(mine or [uuid.UUID(int=0)]))
+    else:  # every community you can see: all non-batch ones plus your own batch
+        stmt = stmt.where(or_(DiscussionGroup.kind != "batch", DiscussionGroup.id.in_(mine or [uuid.UUID(int=0)])))
+    if category:
+        stmt = stmt.where(DiscussionGroup.category == category)
     if kind:
         stmt = stmt.where(DiscussionGroup.kind == kind)
     if q:
@@ -847,8 +879,10 @@ class GroupIn(BaseModel):
     name: str = Field(..., min_length=3, max_length=120)
     description: str = Field("", max_length=1000)
     kind: Literal["interest", "forum"] = "interest"
+    category: GROUP_CATEGORIES = "interest"
     join_policy: Literal["open", "approval"] = "open"
     cover_id: uuid.UUID | None = None
+    photo_id: uuid.UUID | None = None
 
     _t = field_validator("name", "description", mode="before")(_text)
 
@@ -865,17 +899,20 @@ async def create_group(
     ).first()
     if dup:
         raise conflict("GROUP_EXISTS", "A group with this name already exists.")
-    if body.cover_id:
-        m = await db.get(Media, body.cover_id)
-        if not m or m.uploaded_by != p.id or not m.mime.startswith("image/"):
-            raise AppError(422, "INVALID_MEDIA", "Upload the cover image again.")
+    for mid in (body.cover_id, body.photo_id):
+        if mid:
+            m = await db.get(Media, mid)
+            if not m or m.uploaded_by != p.id or not m.mime.startswith("image/"):
+                raise AppError(422, "INVALID_MEDIA", "Upload the image again.")
     auto = p.can("community.approve")
     g = DiscussionGroup(
         name=body.name,
         description=body.description,
         kind=body.kind,
+        category=body.category,
         join_policy=body.join_policy,
         cover_id=body.cover_id,
+        photo_id=body.photo_id,
         created_by=p.id,
         status="active" if auto else "pending",
         member_count=1,
@@ -906,7 +943,9 @@ class GroupEdit(BaseModel):
     name: str | None = Field(None, min_length=3, max_length=120)
     description: str | None = Field(None, max_length=1000)
     join_policy: Literal["open", "approval"] | None = None
+    category: GROUP_CATEGORIES | None = None
     cover_id: uuid.UUID | None = None
+    photo_id: uuid.UUID | None = None
 
     _t = field_validator("name", "description", mode="before")(_text)
 
@@ -917,8 +956,12 @@ async def edit_group(group_id: uuid.UUID, body: GroupEdit, p: Principal = Depend
     if not await svc.can_manage_group(db, p, g):
         raise forbidden()
     for f in body.model_fields_set:
-        if f == "join_policy" and g.kind == "batch":
+        if f in ("join_policy", "category") and g.kind == "batch":
             continue
+        if f in ("cover_id", "photo_id") and (mid := getattr(body, f)):
+            m = await db.get(Media, mid)
+            if not m or m.uploaded_by != p.id or not m.mime.startswith("image/"):
+                raise AppError(422, "INVALID_MEDIA", "Upload the image again.")
         setattr(g, f, getattr(body, f))
     await db.flush()
     return {"data": await svc.group_out(db, p, g)}

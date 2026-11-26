@@ -50,6 +50,7 @@ async def ensure_batch_group(db: AsyncSession, user_id: uuid.UUID) -> Discussion
                 name=f"{b.name} community",
                 description=f"Private community of {b.name}.",
                 kind="batch",
+                category="batch",
                 batch_id=b.id,
                 join_policy="approval",
                 status="active",
@@ -170,7 +171,17 @@ async def media_for(db: AsyncSession, post_ids: list[uuid.UUID]) -> dict:
     for pid, m in rows:
         pub = await media.to_public(db, m)
         out.setdefault(pid, []).append(
-            {"id": str(m.id), "url": pub["url"], "variants": pub["variants"], "width": m.width, "height": m.height, "alt": m.alt}
+            {
+                "id": str(m.id),
+                "url": pub["url"],
+                "variants": pub["variants"],
+                "width": m.width,
+                "height": m.height,
+                "alt": m.alt,
+                "mime": m.mime,
+                "filename": m.filename,
+                "size": m.size,
+            }
         )
     return out
 
@@ -314,13 +325,17 @@ async def comments_out(db: AsyncSession, p: Principal, rows: list[Comment]) -> l
     ]
 
 
+async def _image(db: AsyncSession, media_id: uuid.UUID | None) -> dict | None:
+    if not media_id or not (m := await db.get(Media, media_id)) or m.deleted_at:
+        return None
+    pub = await media.to_public(db, m)
+    return {"url": pub["url"], "variants": pub["variants"]}
+
+
 async def group_out(db: AsyncSession, p: Principal, g: DiscussionGroup, my: GroupMember | None | bool = False) -> dict:
     if my is False:
         my = await db.get(GroupMember, (g.id, p.id))
-    cover = None
-    if g.cover_id and (m := await db.get(Media, g.cover_id)) and not m.deleted_at:
-        pub = await media.to_public(db, m)
-        cover = {"url": pub["url"], "variants": pub["variants"]}
+    cover = await _image(db, g.cover_id)
     return {
         "id": str(g.id),
         "name": g.name,
@@ -332,8 +347,11 @@ async def group_out(db: AsyncSession, p: Principal, g: DiscussionGroup, my: Grou
         "post_count": g.post_count,
         "last_post_at": g.last_post_at,
         "cover": cover,
+        "photo": await _image(db, g.photo_id),
+        "category": g.category,
+        "private": g.join_policy != "open",
         "batch_id": str(g.batch_id) if g.batch_id else None,
-        "membership": {"role": my.role, "status": my.status} if my else None,
+        "membership": {"role": my.role, "status": my.status, "notify": my.notify} if my else None,
         "can_manage": await can_manage_group(db, p, g),
         "created_at": g.created_at,
     }

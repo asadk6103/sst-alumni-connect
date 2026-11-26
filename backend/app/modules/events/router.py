@@ -37,6 +37,7 @@ async def list_events(
     scope: Literal["upcoming", "past", "mine"] = "upcoming",
     kind: str | None = Query(None, max_length=20),
     q: str | None = Query(None, max_length=100),
+    group_id: uuid.UUID | None = None,
     p: PageParams = Depends(page_params),
     me: Principal = Depends(member),
     db: AsyncSession = Depends(get_db),
@@ -45,7 +46,10 @@ async def list_events(
     stmt = select(Event).where(
         Event.status.in_(["published", "cancelled"]),
         or_(Event.batch_id.is_(None), Event.batch_id == (prof.batch_id if prof and prof.batch_id else uuid.UUID(int=0))),
+        svc.group_scope(me),
     )
+    if group_id:
+        stmt = stmt.where(Event.group_id == group_id)
     now = svc.now()
     if scope == "upcoming":
         stmt = stmt.where(Event.ends_at >= now).order_by(Event.starts_at)

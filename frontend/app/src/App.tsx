@@ -20,9 +20,9 @@ const MyNetworkPage = lazy(() => import('@/pages/portal/Network').then((m) => ({
 const FindAlumniPage = lazy(() => import('@/pages/portal/Network').then((m) => ({ default: m.FindAlumniPage })));
 const SavedPostsPage = lazy(() => import('@/pages/portal/Feed').then((m) => ({ default: m.SavedPostsPage })));
 const community = () => import('@/pages/portal/Community');
-const CommunityPage = lazy(() => community().then((m) => ({ default: m.CommunityPage })));
-const GroupsPage = lazy(() => community().then((m) => ({ default: m.GroupsPage })));
-const GroupPage = lazy(() => community().then((m) => ({ default: m.GroupPage })));
+const communities = () => import('./pages/portal/Communities');
+const GroupsPage = lazy(() => communities().then((m) => ({ default: m.GroupsPage })));
+const GroupPage = lazy(() => communities().then((m) => ({ default: m.GroupPage })));
 const PostPage = lazy(() => community().then((m) => ({ default: m.PostPage })));
 const MessagesPage = lazy(() => import('@/pages/portal/Messages').then((m) => ({ default: m.MessagesPage })));
 const evp = () => import('@/pages/portal/Events');
@@ -154,7 +154,7 @@ export function App() {
         <Route path="profile" element={<Lazy><MyProfileViewPage /></Lazy>} />
         <Route path="profile/edit/:tab?" element={<Lazy><MyProfilePage /></Lazy>} />
         <Route path="connections/:tab?" element={<Navigate to="/portal/network" replace />} />
-        <Route path="community" element={<Lazy><CommunityPage /></Lazy>} />
+        <Route path="community" element={<Navigate to="/portal/community/groups" replace />} />
         <Route path="community/groups" element={<Lazy><GroupsPage /></Lazy>} />
         <Route path="community/groups/:id" element={<Lazy><GroupPage /></Lazy>} />
         <Route path="community/posts/:id" element={<Lazy><PostPage /></Lazy>} />

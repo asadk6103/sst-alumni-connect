@@ -29,6 +29,8 @@ class Event(UUIDPk, Timestamps, Base):
     max_guests: Mapped[int] = mapped_column(Integer, default=0)
     registration_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     batch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("alumni_batches.id", ondelete="SET NULL"))  # batch-only events
+    # community events (created by the community's managers; private communities: members only)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("discussion_groups.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)  # draft | published | cancelled
     cancel_reason: Mapped[str | None] = mapped_column(String(300))
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 2 of 6 done** (Stages 1–6 complete) · then: mobile app
+Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 3 of 6 done** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -43,7 +43,18 @@ My Network; the profile editor moved to `/portal/profile/edit/:tab`. New API: `a
 `years` / `group` and multi-value filters. Corrupt images now return 415 instead of 500. Migration `0010_profile`.
 Tests: 58 backend; browser walk-through `e2e-redesign-2.mjs` passes (desktop + 390 px).
 
-Next phases: 3 Communities · 4 Events / Jobs / Mentorship ·
+**Phase 3 (done)** — Communities page (hero, search + Create Community, Discover / My Communities / Invitations tabs,
+community cards with cover, badge, Join / Joined, notification bell and menu; My Communities, Trending Discussions and
+Explore by Category asides); community detail (cover + square photo, privacy and member count, Following menu with
+All posts / Highlights only / Off, Invite Members, tabs Discussion / Members / Events / Files / Announcements / About /
+Join Requests, composer with Photo/Video, Document, Event and Poll, sort, overview / about / upcoming events / members
+asides). Communities have categories, a photo, per-member notification levels, invitations (connections; accepting
+skips approval), document posts (PDF / Office / text, communities only), announcements by community admins and
+community events (private communities: members only; posted in the discussion). `/portal/community` now opens
+Communities. New API: `community/trending`, `community/groups/{id}/overview|notify|files|events|invitable|invites`,
+`community/group-invites`. Migration `0011_communities`. Tests: 60 backend; `e2e-redesign-3.mjs` passes (desktop + 390 px).
+
+Next phases: 4 Events / Jobs / Mentorship ·
 5 Resources hub + Messages · 6 Settings (all sections), support tickets and FAQs.
 
 ## Completed (Stage 6 — Production readiness)

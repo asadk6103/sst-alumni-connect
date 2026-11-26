@@ -21,6 +21,9 @@ class DiscussionGroup(UUIDPk, Timestamps, Base):
     # pending (member-proposed, awaiting moderators) | active | archived
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     cover_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media_library.id", ondelete="SET NULL"))
+    photo_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media_library.id", ondelete="SET NULL"))  # square badge
+    # batch | professional | interest | career | higher_studies | social_impact | events
+    category: Mapped[str] = mapped_column(String(30), default="interest", server_default="interest", index=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     member_count: Mapped[int] = mapped_column(Integer, default=0)
     post_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -33,6 +36,7 @@ class GroupMember(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
     role: Mapped[str] = mapped_column(String(20), default="member")  # member | moderator | owner
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | pending | banned
+    notify: Mapped[str] = mapped_column(String(12), default="all", server_default="all")  # all | highlights | off
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -191,4 +195,16 @@ class Invitation(UUIDPk, Base):
     token: Mapped[str] = mapped_column(String(64), unique=True)
     status: Mapped[str] = mapped_column(String(20), default="sent")  # sent | joined
     joined_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GroupInvite(UUIDPk, Base):
+    """A member inviting one of their connections into a community (accepting skips join approval)."""
+
+    __tablename__ = "group_invites"
+    __table_args__ = (UniqueConstraint("group_id", "invitee_id"),)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("discussion_groups.id", ondelete="CASCADE"), index=True)
+    inviter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    invitee_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | accepted | declined
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

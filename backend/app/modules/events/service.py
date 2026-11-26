@@ -3,13 +3,13 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core import settings_store
 from ...core.deps import Principal
 from ...core.errors import not_found
-from ...models import AlumniProfile, Batch, Event, EventFeedback, EventMedia, EventRegistration, Media, User
+from ...models import AlumniProfile, Batch, DiscussionGroup, Event, EventFeedback, EventMedia, EventRegistration, GroupMember, Media, User
 from ...services import custom_fields, live, media, notifications
 
 KINDS = {
@@ -40,7 +40,22 @@ async def visible(db: AsyncSession, p: Principal, ev: Event | None) -> Event:
         prof = await db.get(AlumniProfile, p.id)
         if not prof or prof.batch_id != ev.batch_id:
             raise not_found("Event")
+    if ev.group_id:
+        from ...services import rooms
+
+        g = await db.get(DiscussionGroup, ev.group_id)
+        if not g or not await rooms.can_read_group(db, p, g):
+            raise not_found("Event")
     return ev
+
+
+def group_scope(p: Principal):
+    """Community events: everyone for open communities, members only for private ones."""
+    if p.can("events.view") or p.can("community.view"):
+        return Event.id.is_not(None)
+    open_groups = select(DiscussionGroup.id).where(DiscussionGroup.join_policy == "open", DiscussionGroup.status == "active")
+    mine = select(GroupMember.group_id).where(GroupMember.user_id == p.id, GroupMember.status == "active")
+    return or_(Event.group_id.is_(None), Event.group_id.in_(open_groups), Event.group_id.in_(mine))
 
 
 def seats_taken(ev: Event) -> int:
@@ -90,6 +105,7 @@ async def event_out(db: AsyncSession, p: Principal, ev: Event, detail: bool = Fa
         "cancel_reason": ev.cancel_reason,
         "batch": batch,
         "batch_id": str(ev.batch_id) if ev.batch_id else None,
+        "group": {"id": str(g.id), "name": g.name} if ev.group_id and (g := await db.get(DiscussionGroup, ev.group_id)) else None,
         "is_past": ev.ends_at < now(),
         "my_registration": {
             "id": str(reg.id),

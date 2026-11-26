@@ -32,6 +32,7 @@ from .modules.alumni import registration as alumni_registration
 from .modules.auth.router import router as auth_router
 from .modules.cms import news as news_api
 from .modules.community import admin as community_admin
+from .modules.community import groups as community_groups
 from .modules.community import invitations, search
 from .modules.community import router as community
 from .modules.configuration.router import router as config_router
@@ -147,6 +148,7 @@ def create_app() -> FastAPI:
         alumni_admin.router,
         alumni_records.router,
         alumni_batches.router,
+        community_groups.router,
         community.router,
         community_admin.router,
         messaging.router,

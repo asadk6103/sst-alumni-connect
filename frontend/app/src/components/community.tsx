@@ -18,7 +18,7 @@ import { Dialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, useCon
 import { VerifiedBadge } from '@/components/alumni';
 
 export type Author = { id: string; full_name: string; photo: Photo; verified: boolean; headline: string | null; batch: string | null; staff: boolean };
-type MediaT = { id: string; url: string; mime?: string; variants: { width: number; url: string }[]; width: number | null; height: number | null; alt: string };
+type MediaT = { id: string; url: string; mime?: string; filename?: string; size?: number; variants: { width: number; url: string }[]; width: number | null; height: number | null; alt: string };
 export type PollT = { question: string; multiple: boolean; closes_at: string | null; closed: boolean; voters: number; my_votes: string[];
   options: { id: string; label: string; votes: number; percent: number }[] };
 export type PostT = {
@@ -36,7 +36,8 @@ export type CommentT = { id: string; post_id: string; parent_id: string | null; 
   reactions: Record<string, number>; reaction_count: number; my_reaction: string | null };
 export type GroupT = { id: string; name: string; description: string; kind: 'batch' | 'interest' | 'forum'; join_policy: 'open' | 'approval';
   status: string; member_count: number; post_count: number; last_post_at: string | null; cover: Photo; batch_id: string | null;
-  membership: { role: string; status: string } | null; can_manage: boolean; readable?: boolean };
+  membership: { role: string; status: string; notify?: 'all' | 'highlights' | 'off' } | null; can_manage: boolean; readable?: boolean;
+  photo?: Photo; category?: string; private?: boolean; created_at?: string };
 type FeedPage = { data: PostT[]; meta: { next_cursor: string | null; pinned: PostT[] } };
 
 export const REACTIONS: { key: string; emoji: string; label: string }[] = [
@@ -82,6 +83,26 @@ function AuthorLine({ post }: { post: PostT }) {
         </p>
       </div>
     </div>
+  );
+}
+
+const isDoc = (m: MediaT) => !!m.mime && !m.mime.startsWith('image/') && !m.mime.startsWith('video/');
+
+export function fileSize(n?: number) {
+  if (!n) return '';
+  return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function DocList({ media }: { media: MediaT[] }) {
+  if (!media.length) return null;
+  return (
+    <ul className="mt-3 space-y-2">{media.map((m) => (
+      <li key={m.id}><a href={m.url} target="_blank" rel="noopener noreferrer" download={m.filename}
+        className="flex items-center gap-3 rounded-card border border-line px-3 py-2.5 hover:border-primary/50 hover:bg-canvas">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-btn bg-primary-soft text-primary"><FileText className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{m.filename ?? 'Document'}</span>
+          <span className="text-xs uppercase text-ink-muted">{(m.filename?.split('.').pop() ?? '').slice(0, 5)} · {fileSize(m.size)}</span></span>
+        <span className="text-sm font-semibold text-primary">Download</span></a></li>))}</ul>
   );
 }
 
@@ -239,7 +260,8 @@ export function PostCard({ post, compact, onChanged }: { post: PostT; compact?: 
       {post.topics.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{post.topics.map((t) => <span key={t} className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary">#{t}</span>)}</div>}
       {post.poll && <PollView post={post} />}
       <Attachment post={post} />
-      <Gallery media={post.media} />
+      <Gallery media={post.media.filter((m) => !isDoc(m))} />
+      <DocList media={post.media.filter(isDoc)} />
       {post.kind === 'share' && (post.shared_post ? (
         <div className="mt-3 rounded-card border border-line p-3"><PostCard post={post.shared_post} compact /></div>
       ) : post.shared_unavailable && <p className="mt-3 rounded-card border border-dashed border-line p-3 text-sm text-ink-muted">The shared post is no longer available.</p>)}
@@ -532,10 +554,15 @@ const KINDS: { key: Kind; label: string; icon: typeof Pencil }[] = [
   { key: 'job', label: 'Job', icon: Briefcase }, { key: 'poll', label: 'Poll', icon: BarChart3 }, { key: 'article', label: 'Article', icon: FileText },
 ];
 
-export function Composer({ groups, groupId, forum, announcementAllowed, placeholder }: { groups?: GroupT[]; groupId?: string; forum?: boolean; announcementAllowed?: boolean; placeholder?: string }) {
+export function Composer({ groups, groupId, forum, announcementAllowed, placeholder, onEvent }: {
+  groups?: GroupT[]; groupId?: string; forum?: boolean; announcementAllowed?: boolean; placeholder?: string; onEvent?: () => void;
+}) {
   const { user } = useAuth();
-  const [open, setOpen] = useState<{ kind: Kind; pickMedia?: 'image' | 'video' } | null>(null);
-  const tools: { label: string; icon: typeof Pencil; kind: Kind; media?: 'image' | 'video' }[] = [
+  const [open, setOpen] = useState<{ kind: Kind; pickMedia?: MediaPick } | null>(null);
+  const tools: { label: string; icon: typeof Pencil; kind: Kind; media?: MediaPick }[] = groupId ? [
+    { label: 'Photo / Video', icon: ImagePlus, kind: 'post', media: 'media' }, { label: 'Document', icon: FileText, kind: 'post', media: 'document' },
+    { label: 'Event', icon: CalendarDays, kind: 'event' }, { label: 'Poll', icon: BarChart3, kind: 'poll' },
+  ] : [
     { label: 'Photo', icon: ImagePlus, kind: 'post', media: 'image' }, { label: 'Video', icon: Video, kind: 'post', media: 'video' },
     { label: 'Poll', icon: BarChart3, kind: 'poll' }, { label: 'Event', icon: CalendarDays, kind: 'event' }, { label: 'Job', icon: Briefcase, kind: 'job' },
   ];
@@ -547,7 +574,7 @@ export function Composer({ groups, groupId, forum, announcementAllowed, placehol
           {placeholder ?? (forum ? 'Start a discussion…' : 'Share an update, achievement, opportunity or memory…')}</button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line pt-3 sm:ps-[58px]">
-        {tools.map((t) => <button key={t.label} type="button" onClick={() => setOpen({ kind: t.kind, pickMedia: t.media })}
+        {tools.map((t) => <button key={t.label} type="button" onClick={() => (t.kind === 'event' && onEvent ? onEvent() : setOpen({ kind: t.kind, pickMedia: t.media }))}
           className="flex items-center gap-2 rounded-btn px-3 py-2 text-sm font-medium text-ink hover:bg-canvas"><t.icon className="h-[18px] w-[18px] text-primary" />{t.label}</button>)}
         <Button className="ms-auto" onClick={() => setOpen({ kind: 'post' })}>Post</Button>
       </div>
@@ -557,10 +584,13 @@ export function Composer({ groups, groupId, forum, announcementAllowed, placehol
   );
 }
 
-type Upload = { id: string; url: string; video: boolean };
+type Upload = { id: string; url: string; video: boolean; doc?: { filename: string; size: number } };
+type MediaPick = 'image' | 'video' | 'media' | 'document';
+const MEDIA_ACCEPT = 'image/*,video/mp4,video/webm,video/quicktime';
+const DOC_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv';
 
 export function CreatePostModal({ initialKind = 'post', pickMedia, groups, groupId, forum, announcementAllowed, onClose }: {
-  initialKind?: Kind; pickMedia?: 'image' | 'video'; groups?: GroupT[]; groupId?: string; forum?: boolean; announcementAllowed?: boolean; onClose: () => void;
+  initialKind?: Kind; pickMedia?: MediaPick; groups?: GroupT[]; groupId?: string; forum?: boolean; announcementAllowed?: boolean; onClose: () => void;
 }) {
   const { user } = useAuth();
   const nav = useNavigate();
@@ -584,8 +614,12 @@ export function CreatePostModal({ initialKind = 'post', pickMedia, groups, group
   const [jobId, setJobId] = useState('');
   const key = useRef(crypto.randomUUID?.() ?? String(Date.now()));
   const fileRef = useRef<HTMLInputElement>(null);
-  const [accept, setAccept] = useState('image/*,video/mp4,video/webm,video/quicktime');
-  useEffect(() => { if (pickMedia) { setAccept(pickMedia === 'video' ? 'video/mp4,video/webm,video/quicktime' : 'image/*'); setTimeout(() => fileRef.current?.click(), 50); } }, [pickMedia]);
+  const [accept, setAccept] = useState(MEDIA_ACCEPT);
+  useEffect(() => {
+    if (!pickMedia) return;
+    setAccept(pickMedia === 'video' ? 'video/mp4,video/webm,video/quicktime' : pickMedia === 'image' ? 'image/*' : pickMedia === 'document' ? DOC_ACCEPT : MEDIA_ACCEPT);
+    setTimeout(() => fileRef.current?.click(), 50);
+  }, [pickMedia]);
   const events = useQuery({ queryKey: ['compose-events'], enabled: kind === 'event', queryFn: () => api<{ data: { id: string; title: string; starts_at: string; is_past?: boolean }[] }>('/api/v1/events?page_size=50').then((r) => r.data) });
   const jobs = useQuery({ queryKey: ['compose-jobs'], enabled: kind === 'job', queryFn: () => api<{ data: { id: string; title: string; organization: string }[] }>('/api/v1/jobs?page_size=50').then((r) => r.data) });
   const myGroups = (groups ?? []).filter((g) => g.membership?.status === 'active' && g.status === 'active');
@@ -608,8 +642,10 @@ export function CreatePostModal({ initialKind = 'post', pickMedia, groups, group
       try {
         const fd = new FormData();
         fd.append('file', f);
-        const r = await api<{ data: { id: string; url: string; variants: { width: number; url: string }[] } }>('/api/v1/community/uploads', { method: 'POST', body: fd });
-        setFiles((x) => [...x, { id: r.data.id, url: r.data.variants.find((v) => v.width >= 480)?.url ?? r.data.url, video: f.type.startsWith('video/') }]);
+        const r = await api<{ data: { id: string; url: string; mime: string; filename: string; size: number; variants: { width: number; url: string }[] } }>('/api/v1/community/uploads', { method: 'POST', body: fd });
+        const doc = !r.data.mime.startsWith('image/') && !r.data.mime.startsWith('video/');
+        setFiles((x) => [...x, { id: r.data.id, url: r.data.variants.find((v) => v.width >= 480)?.url ?? r.data.url, video: r.data.mime.startsWith('video/'),
+          doc: doc ? { filename: r.data.filename, size: r.data.size } : undefined }]);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Upload failed.');
       } finally { setUploading((n) => n - 1); }
@@ -687,7 +723,9 @@ export function CreatePostModal({ initialKind = 'post', pickMedia, groups, group
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {files.map((f, i) => (
               <div key={f.id} className={cn('relative overflow-hidden rounded-card bg-canvas', i === 0 && files.length > 2 && 'sm:col-span-2')}>
-                {f.video ? <video src={f.url} className="h-32 w-full object-cover" muted /> : <img src={f.url} alt="" className="h-32 w-full object-cover" />}
+                {f.doc ? <div className="flex h-32 flex-col items-center justify-center gap-1 p-2 text-center"><FileText className="h-8 w-8 text-primary" />
+                  <span className="line-clamp-2 break-all text-xs font-medium text-ink">{f.doc.filename}</span><span className="text-[11px] text-ink-muted">{fileSize(f.doc.size)}</span></div>
+                  : f.video ? <video src={f.url} className="h-32 w-full object-cover" muted /> : <img src={f.url} alt="" className="h-32 w-full object-cover" />}
                 {f.video && <Video className="absolute start-2 top-2 h-5 w-5 text-white drop-shadow" />}
                 <button type="button" aria-label="Remove" onClick={() => setFiles((x) => x.filter((y) => y.id !== f.id))} className="absolute end-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-navy-dark/70 text-white"><X className="h-3.5 w-3.5" /></button>
               </div>
@@ -711,8 +749,8 @@ export function CreatePostModal({ initialKind = 'post', pickMedia, groups, group
         {panel === 'location' && <Input aria-label="Location" placeholder="Where are you? e.g. SST Campus, Rashidabad" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={150} />}
         {panel === 'feeling' && <div className="flex flex-wrap gap-2">{FEELINGS.map((f) => <button key={f} type="button" onClick={() => setFeeling(feeling === f ? '' : f)}
           className={cn('rounded-full border px-3 py-1 text-sm capitalize', feeling === f ? 'border-primary bg-primary-soft text-primary' : 'border-line hover:bg-canvas')}>{f}</button>)}</div>}
-        {announcementAllowed && !target && (
-          <Checkbox checked={announcement} onCheckedChange={setAnnouncement} label="Publish as an announcement (pinned style, everyone)" />
+        {announcementAllowed && (!target || groupId) && (
+          <Checkbox checked={announcement} onCheckedChange={setAnnouncement} label={groupId ? 'Post as a community announcement (notifies all members)' : 'Publish as an announcement (pinned style, everyone)'} />
         )}
       </div>
     </Dialog>
@@ -781,8 +819,8 @@ export function Feed({ filter = 'all', groupId, q, sort = 'latest', endpoint }: 
   );
 }
 
-export function useGroups(scope: 'mine' | 'discover', q = '') {
-  return useQuery({ queryKey: ['groups', scope, q], queryFn: () => get<GroupT[]>(`/api/v1/community/groups?scope=${scope}${q ? `&q=${encodeURIComponent(q)}` : ''}`) });
+export function useGroups(scope: 'mine' | 'discover' | 'all', q = '', category = '') {
+  return useQuery({ queryKey: ['groups', scope, q, category], queryFn: () => get<GroupT[]>(`/api/v1/community/groups?scope=${scope}${q ? `&q=${encodeURIComponent(q)}` : ''}${category ? `&category=${category}` : ''}`) });
 }
 
 export function SectionCard({ title, icon: Icon, action, children, className }: { title: ReactNode; icon?: typeof Users; action?: ReactNode; children: ReactNode; className?: string }) {

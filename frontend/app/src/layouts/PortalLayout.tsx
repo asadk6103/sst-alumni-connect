@@ -53,7 +53,7 @@ function Promo({ onInvite }: { onInvite: () => void }) {
   const t = useT();
   const path = useLocation().pathname;
   const nav = useNavigate();
-  const card = path.startsWith('/portal/community') ? { title: t('promo.communities', 'Join Communities'), text: 'Be part of batch, interest and professional groups. Share, discuss and collaborate with alumni.', label: 'Browse Communities', icon: UsersRound, go: '/portal/community/groups' }
+  const card = path.startsWith('/portal/community') ? { title: t('promo.communities', 'Join Communities'), text: 'Be part of batch, interest and professional groups. Share, discuss and collaborate with alumni.', label: '+ Create Community', icon: UsersRound, go: '/portal/community/groups?create=1' }
     : path.startsWith('/portal/events') ? { title: t('promo.events', 'Host an Alumni Event'), text: 'Plan reunions, networking sessions, webinars and more for the SST alumni community.', label: 'Browse Events', icon: CalendarDays, go: '/portal/events' }
       : path.startsWith('/portal/jobs') ? { title: t('promo.jobs', 'Hire from the SST Alumni Network'), text: 'Post job openings, find talented alumni and grow your team.', label: '+ Post a Job', icon: Briefcase, go: '/portal/jobs/post' }
         : path.startsWith('/portal/mentorship') ? { title: t('promo.mentor', 'Become a Mentor'), text: 'Share your experience, guide fellow alumni and give back to the SST community.', label: '+ Join as a Mentor', icon: GraduationCap, go: '/portal/mentorship/tab/become' }
