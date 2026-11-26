@@ -256,6 +256,8 @@ class Mentor(Timestamps, Base):
     mentees_alumni: Mapped[bool] = mapped_column(Boolean, default=True)
     max_mentees: Mapped[int] = mapped_column(Integer, default=3)
     introduction: Mapped[str] = mapped_column(Text, default="")
+    # career | higher_studies | industry | leadership | entrepreneurship | technology | management | other
+    categories: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     rejection_reason: Mapped[str | None] = mapped_column(String(300))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -269,12 +271,23 @@ class MentorshipRequest(UUIDPk, Timestamps, Base):
     topic: Mapped[str] = mapped_column(String(200))
     goals: Mapped[str] = mapped_column(Text, default="")
     preferred_format: Mapped[str | None] = mapped_column(String(20))
-    # pending | accepted | declined | cancelled | completed
+    initiated_by: Mapped[str] = mapped_column(String(10), default="mentee", server_default="mentee")  # mentee (request) | mentor (offer)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     response_note: Mapped[str | None] = mapped_column(String(1000))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (Index("ix_mentorship_requests_pair_open", "mentor_id", "mentee_id", "status"),)
+
+
+class MenteeProfile(Base):
+    """A member looking for a mentor ("Find a Mentee" for mentors)."""
+
+    __tablename__ = "mentee_profiles"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    looking: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    areas: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    goals: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class MentorshipSession(UUIDPk, Timestamps, Base):

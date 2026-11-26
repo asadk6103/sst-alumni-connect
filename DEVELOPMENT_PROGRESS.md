@@ -1,6 +1,6 @@
 # Development progress — SST Alumni Connect
 
-Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 3 of 6 done** (Stages 1–6 complete) · then: mobile app
+Last updated: 2026-11-26 · Current stage: **Portal redesign — phase 4 of 6 done** (Stages 1–6 complete) · then: mobile app
 
 ## Stage plan
 
@@ -54,7 +54,18 @@ community events (private communities: members only; posted in the discussion). 
 Communities. New API: `community/trending`, `community/groups/{id}/overview|notify|files|events|invitable|invites`,
 `community/group-invites`. Migration `0011_communities`. Tests: 60 backend; `e2e-redesign-3.mjs` passes (desktop + 390 px).
 
-Next phases: 4 Events / Jobs / Mentorship ·
+**Phase 4 (done)** — Events: featured carousel, Upcoming / Attending / Interested / Past tabs, row cards with RSVP and
+Interested, My Events counts, categories, member-proposed events (reviewed by the alumni office); event detail with hero,
+calendar / share / bookmark, Overview (highlights, agenda, location + directions), Discussion, Attendees, Photos, Files,
+status card (attending / interested / invited), organiser, attendees, share links and invites. Jobs: career hero,
+filter tiles, infinite list, job activity, career resources, referrals (members or outside candidates), job alerts
+(notified on matching new jobs), structured responsibilities / requirements / benefits, employer size and headquarters,
+similar jobs, Message the poster. Mentorship: hero, Find a Mentor (category tiles, mentor rows with mentee count and
+years mentoring), Find a Mentee (approved mentors browse members who asked for a mentor and send offers), My
+Mentorships, Sessions, Mentorship Requests (answer requests and offers), categories, upcoming sessions. Migrations
+`0012_events`, `0013_jobs`, `0014_mentorship`. Tests: 65 backend; `e2e-redesign-4a/4b/4c.mjs` pass (desktop + 390 px).
+
+Next phases:
 5 Resources hub + Messages · 6 Settings (all sections), support tickets and FAQs.
 
 ## Completed (Stage 6 — Production readiness)

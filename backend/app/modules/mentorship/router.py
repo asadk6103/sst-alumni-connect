@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/mentorship", tags=["Mentorship"], dependencie
 admin = APIRouter(prefix="/api/v1/admin/mentorship", tags=["Admin: mentorship"])
 member = require("portal.access")
 FORMATS = Literal["video", "phone", "in_person", "chat"]
+CATEGORIES = Literal["career", "higher_studies", "industry", "leadership", "entrepreneurship", "technology", "management", "other"]
 
 
 def _meta(p: PageParams, total: int) -> dict:
@@ -75,6 +76,15 @@ async def mentor_out(db: AsyncSession, m: Mentor, people: dict | None = None, ra
         "mentees_alumni": m.mentees_alumni,
         "max_mentees": m.max_mentees,
         "introduction": m.introduction,
+        "categories": m.categories or [],
+        "mentee_count": (
+            await db.execute(
+                select(func.count())
+                .select_from(MentorshipRequest)
+                .where(MentorshipRequest.mentor_id == m.user_id, MentorshipRequest.status.in_(["accepted", "completed"]))
+            )
+        ).scalar_one(),
+        "mentoring_since": m.approved_at,
         "rating": rating[0] if rating else None,
         "reviews": rating[1] if rating else 0,
         "active_mentees": await _active_mentees(db, m.user_id),
@@ -106,6 +116,7 @@ class MentorIn(BaseModel):
     max_mentees: int = Field(3, ge=1, le=30)
     introduction: str = Field(..., min_length=30, max_length=3000)
     custom_fields: dict = Field(default_factory=dict)
+    categories: list[CATEGORIES] = Field(default_factory=list, max_length=8)
 
     @field_validator("expertise", "skills")
     @classmethod
@@ -186,6 +197,7 @@ async def mentors(
     q: str | None = Query(None, max_length=100),
     industry: str | None = Query(None, max_length=100),
     expertise: str | None = Query(None, max_length=60),
+    category: CATEGORIES | None = None,
     format: FORMATS | None = None,
     available: bool = False,
     p: PageParams = Depends(page_params),
@@ -218,6 +230,8 @@ async def mentors(
         stmt = stmt.where(func.lower(cast(Mentor.expertise, Text)).like(f"%{expertise.strip().lower()}%"))
     if format:
         stmt = stmt.where(Mentor.formats.contains([format]))
+    if category:
+        stmt = stmt.where(Mentor.categories.contains([category]))
     if available:
         m2 = aliased(Mentor)  # independent of the outer query
         full = (
@@ -247,7 +261,20 @@ async def mentors(
             )
         ).all()
     ]
-    return {"data": [await mentor_out(db, m, people, ratings) for m in rows], "meta": {**_meta(p, total), "industries": industries}}
+    mine = {
+        r.mentor_id: {"id": str(r.id), "status": r.status}
+        for r in (
+            await db.execute(
+                select(MentorshipRequest).where(
+                    MentorshipRequest.mentee_id == me.id,
+                    MentorshipRequest.mentor_id.in_([m.user_id for m in rows] or [uuid.UUID(int=0)]),
+                    MentorshipRequest.status.in_(["pending", "accepted"]),
+                )
+            )
+        ).scalars()
+    }
+    data = [{**await mentor_out(db, m, people, ratings), "my_request": mine.get(m.user_id)} for m in rows]
+    return {"data": data, "meta": {**_meta(p, total), "industries": industries}}
 
 
 @router.get("/mentors/{user_id}", summary="A mentor's profile")
@@ -310,6 +337,8 @@ async def request_out(
         "goals": r.goals,
         "preferred_format": r.preferred_format,
         "status": r.status,
+        "initiated_by": r.initiated_by,
+        "awaiting_me": r.status == "pending" and me.id == (r.mentor_id if r.initiated_by == "mentee" else r.mentee_id),
         "response_note": r.response_note,
         "created_at": r.created_at,
         "responded_at": r.responded_at,
@@ -355,6 +384,9 @@ class _Blank(dict):
 
 TITLES = {
     "mentorship.request": "{from} asked you for mentorship",
+    "mentorship.offer": "{from} offered to mentor you",
+    "mentorship.offer_accepted": "{mentee} accepted your mentorship offer",
+    "mentorship.offer_declined": "{mentee} declined your mentorship offer",
     "mentorship.accepted": "{mentor} accepted your mentorship request",
     "mentorship.declined": "{mentor} declined your mentorship request",
     "mentorship.cancelled": "{mentee} cancelled the mentorship",
@@ -468,13 +500,29 @@ class RespondIn(BaseModel):
     note: str | None = Field(None, max_length=1000)
 
 
-@router.post("/requests/{request_id}/respond", summary="Accept or decline a request (mentor)")
+@router.post("/requests/{request_id}/respond", summary="Accept or decline a request (mentor) or an offer (mentee)")
 async def respond(request_id: uuid.UUID, body: RespondIn, me: Principal = Depends(member), db: AsyncSession = Depends(get_db)):
     r = await _req(db, me, request_id)
-    if r.mentor_id != me.id:
-        raise forbidden("Only the mentor can reply.")
+    offer = r.initiated_by == "mentor"
+    if me.id != (r.mentee_id if offer else r.mentor_id):
+        raise forbidden("Only the mentee can reply to an offer." if offer else "Only the mentor can reply.")
     if r.status != "pending":
         raise conflict("NOT_PENDING", "This request is no longer waiting for a reply.")
+    if offer:
+        if body.accept:
+            m = await db.get(Mentor, r.mentor_id)
+            if not m or m.status != "approved" or await _active_mentees(db, r.mentor_id) >= m.max_mentees:
+                raise conflict("FULL", "This mentor has no free places right now.")
+        r.status, r.response_note, r.responded_at = ("accepted" if body.accept else "declined"), body.note, now()
+        await db.flush()
+        await _notify(
+            db,
+            r.mentor_id,
+            "mentorship.offer_accepted" if body.accept else "mentorship.offer_declined",
+            {"mentee": me.full_name, "note": body.note or ""},
+            f"/portal/mentorship/requests/{r.id}",
+        )
+        return {"data": await request_out(db, me, r, with_sessions=True)}
     if body.accept:
         m = await db.get(Mentor, me.id)
         if m and await _active_mentees(db, me.id) >= m.max_mentees:
