@@ -100,8 +100,21 @@ async def job_out(
         owner = mine or p.can("jobs.view")
         out["custom_fields"] = (j.custom_fields or {}) if owner else None
         out["extra_fields"] = await custom_fields.visible_for(db, "job_post", j.custom_fields, "owner" if owner else "member")
+        if emp:
+            out["employer"].update(
+                {
+                    "industry": emp.industry,
+                    "description": emp.description,
+                    "website": emp.website,
+                    "employees": emp.employees,
+                    "headquarters": emp.headquarters,
+                }
+            )
         out.update(
             {
+                "responsibilities": j.responsibilities or [],
+                "requirements": j.requirements or [],
+                "benefits": j.benefits or [],
                 "description": j.description,
                 "apply_url": j.apply_url,
                 "apply_email": j.apply_email,
@@ -248,6 +261,14 @@ class JobIn(BaseModel):
     apply_in_portal: bool = True
     is_referral: bool = False
     custom_fields: dict = Field(default_factory=dict)
+    responsibilities: list[str] = Field(default_factory=list, max_length=25)
+    requirements: list[str] = Field(default_factory=list, max_length=25)
+    benefits: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("responsibilities", "requirements", "benefits")
+    @classmethod
+    def _lines(cls, v):
+        return [s.strip()[:300] for s in v if s and s.strip()]
 
     @field_validator("skills")
     @classmethod
@@ -303,6 +324,10 @@ async def create_job(
     )
     db.add(j)
     await db.flush()
+    if auto:
+        from .extras import notify_alerts
+
+        await notify_alerts(db, j)
     await record(
         db,
         actor_id=me.id,
@@ -629,6 +654,8 @@ class EmployerIn(BaseModel):
     industry: str | None = Field(None, max_length=100)
     description: str = Field("", max_length=2000)
     logo_id: uuid.UUID | None = None
+    employees: str | None = Field(None, max_length=30)
+    headquarters: str | None = Field(None, max_length=150)
 
 
 def _employer_out(e: Employer, logo: str | None = None) -> dict:
@@ -638,6 +665,8 @@ def _employer_out(e: Employer, logo: str | None = None) -> dict:
         "website": e.website,
         "industry": e.industry,
         "description": e.description,
+        "employees": e.employees,
+        "headquarters": e.headquarters,
         "logo": logo,
         "status": e.status,
         "rejection_reason": e.rejection_reason,
@@ -699,6 +728,10 @@ async def _decide_job(db: AsyncSession, me: Principal, job_id: uuid.UUID, approv
         )
     j.status = "approved" if approve else "rejected"
     j.approved_by, j.approved_at = (me.id, datetime.now(UTC)) if approve else (None, None)
+    if approve:
+        from .extras import notify_alerts
+
+        await notify_alerts(db, j)
     j.rejection_reason = None if approve else reason
     if j.posted_by and j.posted_by != me.id and (u := await db.get(User, j.posted_by)):
         general = await settings_store.get_group(db, "general")

@@ -42,6 +42,7 @@ from .modules.institutional import donations as donations
 from .modules.institutional import gallery as gallery
 from .modules.institutional import newsletters as newsletters
 from .modules.institutional import notifications as notifications_api
+from .modules.jobs import extras as jobs_extras
 from .modules.jobs import router as jobs
 from .modules.mentorship import router as mentorship
 from .modules.messaging import router as messaging
@@ -156,6 +157,7 @@ def create_app() -> FastAPI:
         events_extras.router,
         events.router,
         events.admin,
+        jobs_extras.router,
         jobs.router,
         jobs.admin,
         mentorship.router,

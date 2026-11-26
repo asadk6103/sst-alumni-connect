@@ -132,6 +132,8 @@ class Employer(UUIDPk, Timestamps, Base):
     owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending | approved | rejected
     rejection_reason: Mapped[str | None] = mapped_column(String(300))
+    employees: Mapped[str | None] = mapped_column(String(30))  # e.g. "250+"
+    headquarters: Mapped[str | None] = mapped_column(String(150))
 
 
 class JobCategory(UUIDPk, Base):
@@ -169,6 +171,35 @@ class JobPost(UUIDPk, Timestamps, Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     views: Mapped[int] = mapped_column(Integer, default=0)
     custom_fields: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    responsibilities: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    requirements: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    benefits: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+
+class JobAlert(UUIDPk, Base):
+    """Notify me about new jobs matching these filters."""
+
+    __tablename__ = "job_alerts"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    q: Mapped[str | None] = mapped_column(String(100))
+    employment_type: Mapped[str | None] = mapped_column(String(20))
+    location: Mapped[str | None] = mapped_column(String(100))
+    remote: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class JobReferral(UUIDPk, Base):
+    """An alumnus recommends a candidate (a fellow member or someone outside the portal) for a job."""
+
+    __tablename__ = "job_referrals"
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_posts.id", ondelete="CASCADE"), index=True)
+    referrer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    candidate_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    candidate_name: Mapped[str] = mapped_column(String(150))
+    candidate_email: Mapped[str | None] = mapped_column(String(255))
+    note: Mapped[str] = mapped_column(String(1000), default="")
+    status: Mapped[str] = mapped_column(String(20), default="sent")  # sent | reviewed | hired | declined
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Resume(UUIDPk, Base):
