@@ -37,6 +37,47 @@ class Event(UUIDPk, Timestamps, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     registered_count: Mapped[int] = mapped_column(Integer, default=0)  # seats taken incl. guests
     custom_fields: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    highlights: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))  # short strings
+    agenda: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))  # [{time, title}]
+
+
+class EventInterest(Base):
+    """A member marked an event as "interested" (bookmark)."""
+
+    __tablename__ = "event_interests"
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EventInvite(Base):
+    __tablename__ = "event_invites"
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), primary_key=True)
+    invitee_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    inviter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EventComment(UUIDPk, Base):
+    """Event discussion."""
+
+    __tablename__ = "event_comments"
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    body: Mapped[str] = mapped_column(String(2000))
+    status: Mapped[str] = mapped_column(String(20), default="published")  # published | deleted
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EventFile(Base):
+    """Documents the organisers attach to an event (agenda PDF, forms …)."""
+
+    __tablename__ = "event_files"
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), primary_key=True)
+    media_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("media_library.id", ondelete="CASCADE"), primary_key=True)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class EventRegistration(UUIDPk, Base):

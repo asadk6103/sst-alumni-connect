@@ -15,7 +15,7 @@ import { CustomFieldsForm, customErrors, useCustomFields, type CustomValues } fr
 import { Dialog, Tabs, useConfirm, useToast } from '@/components/ui/overlay';
 import { DataTable, Pagination } from '@/components/ui/table';
 import type { Author } from '@/components/community';
-import { pick, when, type EventT } from '@/pages/portal/Events';
+import { EVENT_KIND_OPTIONS, EventExtrasEditor, pick, when, type Agenda, type EventT } from '@/pages/portal/Events';
 import { TYPE_LABEL, type Job } from '@/pages/portal/Jobs';
 import { Stars, type MentorT } from '@/pages/portal/Mentorship';
 import { ACH_KINDS, type AchievementT } from '@/pages/portal/Achievements';
@@ -33,8 +33,7 @@ async function uploadImage(file: File): Promise<string> {
 
 // ── events ──────────────────────────────────────────────────────────────────
 type AdminEvent = EventT & { counts: Record<string, number> };
-const EVENT_KINDS: [string, string][] = [['reunion', 'Annual reunion'], ['batch_reunion', 'Batch reunion'], ['networking', 'Networking'], ['seminar', 'Seminar'],
-  ['webinar', 'Webinar'], ['sports', 'Sports'], ['career', 'Career guidance'], ['other', 'Other']];
+const EVENT_KINDS = EVENT_KIND_OPTIONS;
 
 export function EventsAdminPage() {
   const { id } = useParams();
@@ -60,14 +59,14 @@ function EventsList() {
           <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
             <Input aria-label="Search events" placeholder="Search events…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="pl-9" /></div>
           <Select aria-label="When" value={scope} onChange={(e) => { setScope(e.target.value); setPage(1); }} className="md:w-36"><option value="upcoming">Upcoming</option><option value="past">Past</option><option value="">All</option></Select>
-          <Select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="md:w-40"><option value="">Any status</option><option value="draft">Draft</option><option value="published">Published</option><option value="cancelled">Cancelled</option></Select>
+          <Select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="md:w-40"><option value="">Any status</option><option value="pending">Waiting for review</option><option value="draft">Draft</option><option value="published">Published</option><option value="cancelled">Cancelled</option></Select>
         </div>
         <DataTable rows={list.data?.data} loading={list.isLoading} rowKey={(e) => e.id}
           empty={<EmptyState icon={CalendarDays} title="No events" description="Create the first event — it stays a draft until you publish it." />}
           columns={[
             { key: 'title', header: 'Event', cell: (e) => <Link to={`/admin/events/${e.id}`} className="block max-w-xs"><p className="font-medium text-primary hover:underline">{e.title}</p><p className="text-xs text-ink-muted">{e.kind_label}{e.batch ? ` · ${e.batch}` : ''}</p></Link> },
             { key: 'when', header: 'When', cell: (e) => <span className="text-sm">{fmtDateTime(e.starts_at)}</span> },
-            { key: 'status', header: 'Status', cell: (e) => <Badge tone={e.status === 'published' ? 'success' : e.status === 'draft' ? 'warning' : 'neutral'} className="capitalize">{e.status}</Badge> },
+            { key: 'status', header: 'Status', cell: (e) => <Badge tone={e.status === 'published' ? 'success' : e.status === 'draft' || e.status === 'pending' ? 'warning' : 'neutral'} className="capitalize">{e.status === 'pending' ? 'Waiting for review' : e.status}</Badge> },
             { key: 'regs', header: 'Registrations', cell: (e) => <span className="text-sm">{e.counts.registered + e.counts.attended}{e.capacity ? ` / ${e.capacity}` : ''}{e.counts.waitlisted ? <span className="text-ink-muted"> · {e.counts.waitlisted} waitlisted</span> : ''}</span> },
             { key: 'att', header: 'Attended', hideOnMobile: true, cell: (e) => e.counts.attended },
             { key: 'act', header: <span className="sr-only">Actions</span>, className: 'text-right', cell: (e) => <Button size="sm" variant="outline" asChild><Link to={`/admin/events/${e.id}`}>Manage</Link></Button> },
@@ -93,8 +92,10 @@ function EventFormInner({ e, batches, onClose, onSaved }: { e?: EventT & { banne
     title: e?.title ?? '', kind: e?.kind ?? 'reunion', summary: e?.summary ?? '', description: e?.description ?? '', banner_id: e?.banner_id ?? null as string | null,
     starts_at: toLocal(e?.starts_at), ends_at: toLocal(e?.ends_at), venue: e?.venue ?? '', address: e?.address ?? '', is_online: e?.is_online ?? false,
     online_url: e?.online_url ?? '', capacity: e?.capacity ? String(e.capacity) : '', max_guests: String(e?.max_guests ?? 0),
-    registration_deadline: toLocal(e?.registration_deadline), batch_id: e?.batch_id ?? '',
+    registration_deadline: toLocal(e?.registration_deadline), batch_id: e?.batch_id ?? '', is_featured: e?.is_featured ?? false,
   });
+  const [highlights, setHighlights] = useState<string[]>(e?.highlights ?? []);
+  const [agenda, setAgenda] = useState<Agenda[]>(e?.agenda ?? []);
   const [banner, setBanner] = useState<string | null>(e?.banner ? pick(e.banner, 800) ?? null : null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -104,7 +105,7 @@ function EventFormInner({ e, batches, onClose, onSaved }: { e?: EventT & { banne
   const save = useAction(() => api<{ data: EventT }>(e ? `/api/v1/admin/events/${e.id}` : '/api/v1/admin/events', { method: e ? 'PUT' : 'POST', body: {
     ...f, starts_at: fromLocal(f.starts_at), ends_at: fromLocal(f.ends_at), registration_deadline: fromLocal(f.registration_deadline),
     capacity: f.capacity ? Number(f.capacity) : null, max_guests: Number(f.max_guests), online_url: f.online_url || null, venue: f.venue || null,
-    address: f.address || null, batch_id: f.batch_id || null, custom_fields: extra,
+    address: f.address || null, batch_id: f.batch_id || null, custom_fields: extra, highlights, agenda: agenda.filter((a) => a.title.trim()),
   } }), { success: e ? 'Event saved.' : 'Event created as a draft.', invalidate: [['admin-events'], ['admin-event'], ['events']], onSuccess: (r) => onSaved(r.data.id) });
   const err = save.fieldErrors;
   return (
@@ -132,6 +133,8 @@ function EventFormInner({ e, batches, onClose, onSaved }: { e?: EventT & { banne
             try { const mid = await uploadImage(file); set('banner_id', mid); setBanner(URL.createObjectURL(file)); } catch (err2) { toast.error(err2 instanceof Error ? err2.message : 'Upload failed.'); } finally { setUploading(false); } }} /></div>
         <Field label="Summary" hint="One line shown on event cards." className="sm:col-span-2">{(id, d) => <Input id={id} aria-describedby={d} value={f.summary} maxLength={300} onChange={(x) => set('summary', x.target.value)} />}</Field>
         <Field label="Description" className="sm:col-span-2">{(id) => <Textarea id={id} value={f.description} maxLength={20000} onChange={(x) => set('description', x.target.value)} className="min-h-[140px]" />}</Field>
+        <div className="sm:col-span-2"><Checkbox checked={f.is_featured} onCheckedChange={(v) => set('is_featured', v)} label="Feature this event in the carousel on the Events page" /></div>
+        <div className="sm:col-span-2"><EventExtrasEditor highlights={highlights} agenda={agenda} onHighlights={setHighlights} onAgenda={setAgenda} /></div>
         {!!defs.data?.length && <div className="border-t border-line pt-4 sm:col-span-2"><CustomFieldsForm defs={defs.data} value={extra} onChange={setExtra} errors={customErrors(err)} /></div>}
       </div>
     </Dialog>
@@ -155,10 +158,10 @@ function EventManage({ id }: { id: string }) {
     <>
       <PageHeader title={e.title} breadcrumb={<Link to="/admin/events" className="hover:text-ink">Events</Link>} description={`${e.kind_label} · ${when(e)} · ${e.is_online ? 'Online' : e.venue}`}
         actions={<>
-          {e.status === 'draft' && can('events.publish') && <Button onClick={() => publish.mutate(undefined)}><Send />Publish</Button>}
+          {(e.status === 'draft' || e.status === 'pending') && can('events.publish') && <Button onClick={() => publish.mutate(undefined)}><Send />{e.status === 'pending' ? 'Approve & publish' : 'Publish'}</Button>}
           {can('events.edit') && e.status !== 'cancelled' && <Button variant="outline" onClick={() => setEditing(true)}><Pencil />Edit</Button>}
           {can('events.edit') && e.status === 'published' && <Button variant="danger-outline" onClick={() => setCancelling(true)}><Ban />Cancel event</Button>}
-          {can('events.delete') && e.status === 'draft' && <Button variant="ghost" onClick={async () => { if (await confirm({ title: 'Delete this draft?', confirmLabel: 'Delete', danger: true })) del.mutate(undefined); }}><Trash2 />Delete</Button>}
+          {can('events.delete') && (e.status === 'draft' || e.status === 'pending') && <Button variant="ghost" onClick={async () => { if (await confirm({ title: 'Delete this draft?', confirmLabel: 'Delete', danger: true })) del.mutate(undefined); }}><Trash2 />Delete</Button>}
         </>} />
       <div className="mb-5 grid gap-4 sm:grid-cols-4">
         <StatTile icon={Users} value={e.registered_count} label={e.capacity ? `of ${e.capacity} seats taken` : 'Seats taken'} />

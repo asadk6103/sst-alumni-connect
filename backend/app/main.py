@@ -36,6 +36,7 @@ from .modules.community import groups as community_groups
 from .modules.community import invitations, search
 from .modules.community import router as community
 from .modules.configuration.router import router as config_router
+from .modules.events import extras as events_extras
 from .modules.events import router as events
 from .modules.institutional import donations as donations
 from .modules.institutional import gallery as gallery
@@ -152,6 +153,7 @@ def create_app() -> FastAPI:
         community.router,
         community_admin.router,
         messaging.router,
+        events_extras.router,
         events.router,
         events.admin,
         jobs.router,

@@ -17,7 +17,7 @@ from ...core.deps import Principal, client_ip, require, require_module
 from ...core.errors import AppError, conflict, not_found
 from ...core.pagination import PageParams, csv_response, page_params
 from ...core.redis import enforce
-from ...models import AlumniProfile, Batch, Event, EventAttendance, EventFeedback, EventMedia, EventRegistration, User
+from ...models import AlumniProfile, Batch, Event, EventAttendance, EventFeedback, EventInterest, EventMedia, EventRegistration, User
 from ...services import custom_fields, live, media, messaging, notifications
 from ..community.service import authors
 from . import service as svc
@@ -34,8 +34,8 @@ def _meta(p: PageParams, total: int) -> dict:
 # ── members ─────────────────────────────────────────────────────────────────
 @router.get("", summary="Events (upcoming, past or yours)")
 async def list_events(
-    scope: Literal["upcoming", "past", "mine"] = "upcoming",
-    kind: str | None = Query(None, max_length=20),
+    scope: Literal["upcoming", "past", "mine", "interested"] = "upcoming",
+    kind: str | None = Query(None, max_length=200),
     q: str | None = Query(None, max_length=100),
     group_id: uuid.UUID | None = None,
     p: PageParams = Depends(page_params),
@@ -55,13 +55,15 @@ async def list_events(
         stmt = stmt.where(Event.ends_at >= now).order_by(Event.starts_at)
     elif scope == "past":
         stmt = stmt.where(Event.ends_at < now).order_by(Event.starts_at.desc())
+    elif scope == "interested":
+        stmt = stmt.join(EventInterest, and_(EventInterest.event_id == Event.id, EventInterest.user_id == me.id)).order_by(Event.starts_at)
     else:
         stmt = stmt.join(
             EventRegistration,
             and_(EventRegistration.event_id == Event.id, EventRegistration.user_id == me.id, EventRegistration.status != "cancelled"),
         ).order_by(Event.starts_at.desc())
     if kind:
-        stmt = stmt.where(Event.kind == kind)
+        stmt = stmt.where(Event.kind.in_([k for k in kind.split(",") if k][:20]))
     if q:
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(or_(func.lower(Event.title).like(like), func.lower(Event.venue).like(like), func.lower(Event.summary).like(like)))
@@ -226,9 +228,19 @@ async def feedback(event_id: uuid.UUID, body: FeedbackIn, me: Principal = Depend
 
 
 # ── staff ───────────────────────────────────────────────────────────────────
+EVENT_KINDS = Literal[
+    "reunion", "batch_reunion", "networking", "seminar", "webinar", "workshop", "school", "sports", "career", "social_impact", "other"
+]
+
+
+class AgendaItem(BaseModel):
+    time: str = Field(..., max_length=20)
+    title: str = Field(..., min_length=1, max_length=150)
+
+
 class EventIn(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
-    kind: Literal["reunion", "batch_reunion", "networking", "seminar", "webinar", "sports", "career", "other"]
+    kind: EVENT_KINDS
     summary: str = Field("", max_length=300)
     description: str = Field("", max_length=20000)
     banner_id: uuid.UUID | None = None
@@ -243,6 +255,14 @@ class EventIn(BaseModel):
     registration_deadline: datetime | None = None
     batch_id: uuid.UUID | None = None
     custom_fields: dict = Field(default_factory=dict)
+    is_featured: bool = False
+    highlights: list[str] = Field(default_factory=list, max_length=10)
+    agenda: list[AgendaItem] = Field(default_factory=list, max_length=30)
+
+    @field_validator("highlights")
+    @classmethod
+    def _hl(cls, v):
+        return [x.strip()[:60] for x in v if x and x.strip()]
 
     @field_validator("online_url")
     @classmethod
@@ -275,7 +295,7 @@ async def _admin_event(db: AsyncSession, event_id: uuid.UUID) -> Event:
 
 @admin.get("", summary="All events")
 async def admin_list(
-    status: Literal["draft", "published", "cancelled"] | None = None,
+    status: Literal["draft", "pending", "published", "cancelled"] | None = None,
     scope: Literal["upcoming", "past"] | None = None,
     q: str | None = Query(None, max_length=100),
     p: PageParams = Depends(page_params),

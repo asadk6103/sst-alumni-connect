@@ -9,17 +9,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core import settings_store
 from ...core.deps import Principal
 from ...core.errors import not_found
-from ...models import AlumniProfile, Batch, DiscussionGroup, Event, EventFeedback, EventMedia, EventRegistration, GroupMember, Media, User
+from ...models import (
+    AlumniProfile,
+    Batch,
+    DiscussionGroup,
+    Event,
+    EventComment,
+    EventFeedback,
+    EventInterest,
+    EventInvite,
+    EventMedia,
+    EventRegistration,
+    GroupMember,
+    Media,
+    User,
+)
 from ...services import custom_fields, live, media, notifications
 
 KINDS = {
-    "reunion": "Annual reunion",
+    "reunion": "Reunion",
     "batch_reunion": "Batch reunion",
     "networking": "Networking",
     "seminar": "Seminar",
     "webinar": "Webinar",
-    "sports": "Sports",
-    "career": "Career guidance",
+    "workshop": "Workshop",
+    "school": "School event",
+    "sports": "Sports & activities",
+    "career": "Career & jobs",
+    "social_impact": "Social impact",
     "other": "Other",
 }
 
@@ -34,7 +51,7 @@ async def visible(db: AsyncSession, p: Principal, ev: Event | None) -> Event:
         raise not_found("Event")
     if p.can("events.view"):
         return ev
-    if ev.status == "draft":
+    if ev.status == "draft" or (ev.status == "pending" and ev.created_by != p.id):
         raise not_found("Event")
     if ev.batch_id:
         prof = await db.get(AlumniProfile, p.id)
@@ -64,6 +81,40 @@ def seats_taken(ev: Event) -> int:
 
 def seats_left(ev: Event) -> int | None:
     return None if ev.capacity is None else max(0, ev.capacity - ev.registered_count)
+
+
+async def _count(db: AsyncSession, *where) -> int:
+    model = where[0].left.table
+    return (await db.execute(select(func.count()).select_from(model).where(*where))).scalar_one()
+
+
+async def organizer(db: AsyncSession, ev: Event) -> dict:
+    """Who runs the event: its community, the member who proposed it, or the alumni office."""
+    if ev.group_id and (g := await db.get(DiscussionGroup, ev.group_id)):
+        return {
+            "type": "community",
+            "id": str(g.id),
+            "name": g.name,
+            "members": g.member_count,
+            "photo": await image(db, g.photo_id or g.cover_id),
+        }
+    if ev.created_by and (u := await db.get(User, ev.created_by)):
+        prof = await db.get(AlumniProfile, u.id)
+        staff = any(r.is_staff for r in u.roles)
+        if prof and not staff:
+            return {"type": "member", "id": str(u.id), "name": u.full_name, "members": None, "photo": await image(db, prof.photo_id)}
+    return {"type": "office", "id": None, "name": "SST Alumni Office", "members": None, "photo": None}
+
+
+async def can_manage(db: AsyncSession, p: Principal, ev: Event) -> bool:
+    if p.can("events.edit"):
+        return True
+    if ev.created_by == p.id:
+        return True
+    if ev.group_id and (g := await db.get(DiscussionGroup, ev.group_id)):
+        m = await db.get(GroupMember, (g.id, p.id))
+        return bool(m and m.status == "active" and m.role in ("owner", "moderator"))
+    return False
 
 
 async def image(db: AsyncSession, media_id) -> dict | None:
@@ -107,6 +158,16 @@ async def event_out(db: AsyncSession, p: Principal, ev: Event, detail: bool = Fa
         "batch_id": str(ev.batch_id) if ev.batch_id else None,
         "group": {"id": str(g.id), "name": g.name} if ev.group_id and (g := await db.get(DiscussionGroup, ev.group_id)) else None,
         "is_past": ev.ends_at < now(),
+        "is_featured": ev.is_featured,
+        "highlights": ev.highlights or [],
+        "agenda": ev.agenda or [],
+        "interested": bool(await db.get(EventInterest, (ev.id, p.id))),
+        "interested_count": await _count(db, EventInterest.event_id == ev.id),
+        "comment_count": await _count(db, EventComment.event_id == ev.id, EventComment.status == "published"),
+        "invited_count": await _count(db, EventInvite.event_id == ev.id),
+        "attending_count": await _count(db, EventRegistration.event_id == ev.id, EventRegistration.status.in_(["registered", "attended"])),
+        "organizer": await organizer(db, ev),
+        "can_manage": await can_manage(db, p, ev),
         "my_registration": {
             "id": str(reg.id),
             "status": reg.status,
