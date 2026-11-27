@@ -89,13 +89,60 @@ class S3Storage:
             region=cfg.get("region") or None,
         )
 
+    _ready: bool = False  # bucket confirmed / created by this instance
+
     def _key(self, key: str, private: bool) -> str:
         return f"private/{key}" if private else f"public/{key}"
 
+    def _ensure_bucket(self) -> bool:
+        """Create the bucket (and the public-read policy for public/) if it does not exist yet.
+
+        Normally done by the storage test in the setup wizard; doing it on first use means uploads also work
+        when that step was skipped or the bundled MinIO volume was recreated. Returns True if it was created.
+        """
+        created = False
+        if not self.client.bucket_exists(self.bucket):
+            self.client.make_bucket(self.bucket, location=self.cfg.get("region") or None)
+            created = True
+        if self.cfg.get("access", "public") == "public":
+            policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetObject"],
+                        "Resource": [f"arn:aws:s3:::{self.bucket}/public/*"],
+                    }
+                ],
+            }
+            try:
+                self.client.set_bucket_policy(self.bucket, json.dumps(policy))
+            except S3Error:
+                pass  # some providers manage access with their own settings / CDN
+        self._ready = True
+        return created
+
     async def put(self, key: str, data: bytes, content_type: str, private: bool = False) -> Stored:
-        await asyncio.to_thread(
-            self.client.put_object, self.bucket, self._key(key, private), io.BytesIO(data), len(data), content_type=content_type
-        )
+        def write():
+            if not self._ready:
+                self._ensure_bucket()
+            try:
+                self.client.put_object(self.bucket, self._key(key, private), io.BytesIO(data), len(data), content_type=content_type)
+            except S3Error as e:
+                if e.code != "NoSuchBucket":
+                    raise
+                self._ensure_bucket()  # bucket removed since the last check
+                self.client.put_object(self.bucket, self._key(key, private), io.BytesIO(data), len(data), content_type=content_type)
+
+        try:
+            await asyncio.to_thread(write)
+        except S3Error as e:
+            raise StorageError(f"{e.code}: {e.message}") from e
+        except StorageError:
+            raise
+        except Exception as e:  # network errors, wrong endpoint, bad credentials …
+            raise StorageError(f"{type(e).__name__}: {e}") from e
         return Stored("s3", key)
 
     async def get(self, key: str, private: bool = False) -> bytes:
@@ -121,31 +168,10 @@ class S3Storage:
     async def check(self) -> str:
         def probe():
             try:
-                if not self.client.bucket_exists(self.bucket):
-                    self.client.make_bucket(self.bucket, location=self.cfg.get("region") or None)
-                    created = True
-                else:
-                    created = False
+                created = self._ensure_bucket()  # anyone may read objects under public/ (never private/)
                 k = "public/.write-test"
                 self.client.put_object(self.bucket, k, io.BytesIO(b"ok"), 2)
                 self.client.remove_object(self.bucket, k)
-                if self.cfg.get("access", "public") == "public":
-                    # Anyone may read objects under public/ (never private/).
-                    policy = {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Effect": "Allow",
-                                "Principal": {"AWS": ["*"]},
-                                "Action": ["s3:GetObject"],
-                                "Resource": [f"arn:aws:s3:::{self.bucket}/public/*"],
-                            }
-                        ],
-                    }
-                    try:
-                        self.client.set_bucket_policy(self.bucket, json.dumps(policy))
-                    except S3Error:
-                        pass  # some providers manage access with their own settings / CDN
                 return created
             except S3Error as e:
                 raise StorageError(f"{e.code}: {e.message}") from e

@@ -60,6 +60,21 @@ def install(app: FastAPI) -> None:
         code = {401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "HTTP_ERROR")
         return ORJSONResponse(_body(code, str(exc.detail)), status_code=exc.status_code, headers=exc.headers)
 
+    from ..services.storage import StorageError
+
+    @app.exception_handler(StorageError)
+    async def _storage(_: Request, exc: StorageError):
+        # e.g. object storage (MinIO / S3) unreachable or misconfigured: say so instead of a generic error
+        log.error("File storage error: %s", exc)
+        return ORJSONResponse(
+            _body(
+                "STORAGE_UNAVAILABLE",
+                "File storage is not available right now, so the file could not be saved. "
+                "Please try again later. Administrators: check System Configuration → Storage.",
+            ),
+            status_code=503,
+        )
+
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception):
         log.exception("Unhandled error", exc_info=exc)
