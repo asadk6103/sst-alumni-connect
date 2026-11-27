@@ -219,4 +219,4 @@ if ($useLe) {
 } else {
   Write-Host '    HTTPS:      re-run with  -Domain <your-domain> -Email <address>'
 }
-Write-Host "    Mobile app: on the app's sign-in screen, set the server to $base (use the PC's LAN IP from phones)"
+Write-Host "    Mobile app: connects to the server in its app.json (extra.apiUrl) - currently https://sstpsr-connect.duckdns.org"

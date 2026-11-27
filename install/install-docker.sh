@@ -331,4 +331,4 @@ elif [ $USE_LE = 1 ]; then
 else
   echo "    HTTPS:      re-run with  --domain <your-domain> --email <address>"
 fi
-echo "    Mobile app: on the app's sign-in screen, set the server to $BASE"
+echo "    Mobile app: connects to the server in its app.json (extra.apiUrl) — currently https://sstpsr-connect.duckdns.org"

@@ -164,6 +164,6 @@ Update the project folder to the new version, then run the same installer again.
 
 ## Mobile app
 
-The Android/iOS app talks to the same server. Its default server is `https://sstpsr-connect.duckdns.org`
-(`extra.apiUrl` in the app's `app.json`). For another server, tap **Server** on the sign-in screen and enter
-the address printed by the installer. From phones on the same network, use the server's LAN IP rather than `localhost`.
+The Android/iOS app talks to `https://sstpsr-connect.duckdns.org`. That address is set at build time
+(`extra.apiUrl` in the app's `app.json`), and the app has no server setting. For a different server, change it there
+and build a new APK.

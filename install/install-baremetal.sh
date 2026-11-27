@@ -481,5 +481,5 @@ cat <<EOF
     Upgrade:    pull the new version, then run this script again
     Data:       database '$DB_NAME', files in $DATA/storage, keys in $DATA/config
     Backups:    $BACKUPS (taken before each upgrade — copy them off the server)
-    Mobile app: on the app's sign-in screen, set the server to $BASE
+    Mobile app: connects to the server in its app.json (extra.apiUrl) — currently https://sstpsr-connect.duckdns.org
 EOF
