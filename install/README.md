@@ -38,6 +38,7 @@ written to `.env`, which only holds optional infrastructure settings (port, sizi
 ./install/install-docker.sh --domain "alumni.school.pk,www.alumni.school.pk" --email it@school.pk   # several names
 ./install/install-docker.sh --domain alumni.school.pk --email it@school.pk --staging               # trial run
 ./install/install-docker.sh --no-https                                                              # turn it off
+./install/install-docker.sh --shared-proxy --domain alumni.school.pk --email it@school.pk          # another SST app on this server
 ```
 
 Before you run it:
@@ -63,6 +64,53 @@ Requires Docker Compose 2.24 or newer.
 
 **Own certificate** (e.g. the institution's wildcard certificate): use `docker-compose.https.yml` instead, see
 [docs/DEPLOYMENT.md → HTTPS](../docs/DEPLOYMENT.md#https).
+
+## Several SST applications on one server
+
+SST Alumni Connect and the SST Platform website can share one server, each with its own domain.
+Only one program can use ports 80/443, so both applications use **one shared HTTPS proxy**:
+
+```
+internet ──80/443──► sst-edge (Caddy, Let's Encrypt for every domain)
+                       ├─ sstpsr.duckdns.org          ──► SST Platform nginx        (127.0.0.1:8000 on the host)
+                       └─ sstpsr-connect.duckdns.org  ──► SST Alumni Connect nginx  (127.0.0.1:8080 on the host)
+```
+
+Clone both projects next to each other (e.g. `/opt/sst-platform` and `/opt/sst-alumni-connect`), then:
+
+```bash
+cd /opt/sst-platform
+./install/install-docker.sh --shared-proxy --domain sstpsr.duckdns.org --email it@school.pk
+
+cd /opt/sst-alumni-connect
+./install/install-docker.sh --shared-proxy --domain sstpsr-connect.duckdns.org --email it@school.pk
+```
+
+Either order works. The first installer creates the shared proxy in `/opt/sst-edge`, and each installer adds its own
+site file (`/opt/sst-edge/sites/<app>.caddy`) and reloads the proxy without interrupting the other site.
+Re-running an installer (upgrade) keeps the setting. Choose another folder with `--shared-proxy-dir DIR` (use the same
+folder for both applications).
+
+| Port / name | Used by |
+|---|---|
+| 80, 443 (public) | shared proxy `sst-edge` only |
+| 127.0.0.1:8000 | SST Platform nginx (local checks only) |
+| 127.0.0.1:8080 | SST Alumni Connect nginx (local checks, `make health`) |
+| Docker network `sst-edge` | proxy → `sst-platform-nginx`, `sst-alumni-nginx` |
+| Compose projects | `sst` (Platform), `sst-alumni` (Alumni Connect), `sst-edge` (proxy): separate containers, volumes and databases |
+
+Requirements and checks:
+1. **DNS:** both names must point to the server's public IP. With DuckDNS, `sstpsr` and `sstpsr-connect` are separate
+   subdomains, so set the IP for each one at duckdns.org (or keep the DuckDNS update cron updating both).
+2. **Firewall / cloud security group:** open TCP 80 and 443 (and UDP 443 for HTTP/3). Ports 8000 and 8080 stay closed.
+3. Don't use `--domain` without `--shared-proxy` on this server. That starts a second proxy, which can't get ports 80/443.
+4. After the setup wizard, set **System Configuration → General → Application URL** to `https://sstpsr-connect.duckdns.org`
+   (and the public address `https://sstpsr.duckdns.org` in the SST Platform administration).
+5. Memory: both stacks together need about 6 GB of RAM (8 GB recommended). Leave out `--production` unless the server has 16 GB.
+
+Shared proxy commands: `cd /opt/sst-edge && docker compose ps` · `docker compose logs -f caddy`.
+Bare-metal installs can also share a server: give each installer its own `--domain`, and nginx serves both names.
+Don't mix a Docker install and a bare-metal install on one server: both need ports 80/443.
 
 ## Bare metal
 
@@ -116,5 +164,6 @@ Update the project folder to the new version, then run the same installer again.
 
 ## Mobile app
 
-The Android/iOS app talks to the same server. On its sign-in screen, tap **Server** and enter the address
-printed by the installer. From phones on the same network, use the server's LAN IP rather than `localhost`.
+The Android/iOS app talks to the same server. Its default server is `https://sstpsr-connect.duckdns.org`
+(`extra.apiUrl` in the app's `app.json`). For another server, tap **Server** on the sign-in screen and enter
+the address printed by the installer. From phones on the same network, use the server's LAN IP rather than `localhost`.
