@@ -195,8 +195,10 @@ async def _build(db: AsyncSession) -> LocalStorage | S3Storage:
         cfg, sec = dict(integ.config), dict(integ.secrets)
         if integ.provider == "minio":
             bundled = integrations.bundled_minio_defaults()
-            if bundled and not cfg.get("endpoint"):
-                cfg = {**bundled, **{k: v for k, v in cfg.items() if v}}
+            if bundled and (not cfg.get("endpoint") or cfg["endpoint"] == bundled["endpoint"]):
+                # The bundled MinIO is reached over the internal Docker network: always plain HTTP. (The setup
+                # wizard used to save secure=true here, which made every upload fail with an SSL error.)
+                cfg = {**bundled, **{k: v for k, v in cfg.items() if v and k not in ("endpoint", "secure")}}
             if bundled and not sec.get("access_key"):
                 sec = {"access_key": infra().minio_access_key, "secret_key": infra().minio_secret_key}
         return S3Storage(cfg, sec)

@@ -58,3 +58,25 @@ async def test_unreachable_storage_raises_storage_error():
     s = make(FakeMinio(fail=ConnectionError("minio:9000 refused")))
     with pytest.raises(storage.StorageError, match="ConnectionError"):
         await s.put("c.jpg", b"3", "image/jpeg")
+
+
+async def test_bundled_minio_is_plain_http_even_if_saved_as_secure(monkeypatch):
+    """The setup wizard used to save secure=true for the bundled MinIO → SSL WRONG_VERSION_NUMBER on upload."""
+    from types import SimpleNamespace
+
+    from app.services import integrations
+
+    monkeypatch.setattr(integrations, "bundled_minio_defaults", lambda: {"endpoint": "minio:9000", "public_url": "/s3", "secure": False})
+    monkeypatch.setattr(storage, "infra", lambda: SimpleNamespace(minio_access_key="ak", minio_secret_key="sk", storage_dir="."))
+    for endpoint in (None, "minio:9000"):
+        integ = SimpleNamespace(
+            enabled=True, provider="minio", config={"endpoint": endpoint, "bucket": "alumni-media", "secure": True}, secrets={}
+        )
+
+        async def load(db, kind, integ=integ):
+            return integ
+
+        monkeypatch.setattr(integrations, "load", load)
+        s = await storage._build(None)
+        assert s.cfg["secure"] is False and s.cfg["endpoint"] == "minio:9000"
+        assert s.client._base_url.is_https is False

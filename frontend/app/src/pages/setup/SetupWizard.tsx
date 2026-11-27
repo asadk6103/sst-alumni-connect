@@ -149,7 +149,8 @@ export function SetupWizard() {
   const storagePayload = () => ({
     provider: storage.provider,
     config: storage.provider === 'local' ? {} : {
-      endpoint: storage.endpoint || null, bucket: storage.bucket, region: storage.region || null, secure: storage.secure,
+      endpoint: storage.endpoint || null, bucket: storage.bucket, region: storage.region || null,
+      secure: storage.provider === 'minio' && !storage.endpoint ? false : storage.secure,  // bundled MinIO: internal plain HTTP
       public_url: storage.public_url || null, access: 'public',
     },
     access_key: storage.provider === 's3' || (storage.provider === 'minio' && storage.endpoint) ? storage.access_key : null,
