@@ -100,7 +100,7 @@ services:
     logging: *logging
 
   minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    image: elestio/minio:latest
     restart: unless-stopped
     entrypoint: ["sh", "-c", "MINIO_ROOT_USER=$$(cat /run/infra/minio_user) MINIO_ROOT_PASSWORD=$$(cat /run/infra/minio_password) exec minio server /data --console-address :9001"]
     volumes:
